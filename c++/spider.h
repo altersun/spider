@@ -1,13 +1,17 @@
-#include
+#include <stdexcept>
 
 
 
 namespace Spider {
 
-// Priorities
-//static const unsigned int  
+using SpiderException = std::runtime_error;
+ 
 
 
+void SetThreaded(bool threaded);
+
+bool IsRunning();
+bool IsThreaded();
 
 
 

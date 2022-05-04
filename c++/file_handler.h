@@ -1,14 +1,12 @@
 #include <exception>
+#include <memory>
+
+#include <spider.h>
 
 
 namespace Spider {
 
-// TODO: I have no idea why this works
-// https://stackoverflow.com/a/51313801
-struct SpiderException: public std::exception
-{
-    using std::exception::exception;
-};
+
 
 
 // TODO: Make this a tuple or something
@@ -23,39 +21,63 @@ struct Input {
 };
 
 
-typedef Return (*Callback)(Input);
+//typedef Return (*Callback)(Input);
+using Callback = Return (*)(Input); 
 
 
-class FileDescriptor {
-    public:
-        FileDescriptor(int fid, Callback cb);
-        ~FileDescriptor();
+
+
+class Event {
+    public:  
+        virtual ~Event();
         int GetFID();
         int GetSpiderID();
-        int Close();
+        Callback GetCallback();
+        Return operator()(Input);
+        virtual void Close() = 0;
+
+        // Not public Constructor
+        // Force caller to make a shared_ptr
+        template <class ...Args>
+        friend std::shared_ptr<Event> make(Args&& ...args)
+        {
+             std::shared_ptr<Event> ptr = new Event(std::forward<Args>(args)...);
+
+        }
+
     protected:
+        Event() = default;
         int m_fid;
         int m_spiderid;
         Callback m_callback;
 };
 
 
-class Timer: public FileDescriptor {
+using EventPtr = std::shared_ptr<Event>;
+
+
+class Timer: public Event {
     public:
-        Timer(float mSec, Callback cb);
         ~Timer();
         float GetTime();
+
+        /**
+         * Get time remaining before timeout
+         * return: time on success, negative value on failure
+         */
         float GetTimeRemaining();
+        bool IsRepeating();
+        void StopRepeating();
+        void Close();
     protected:
-        float m_time;
+        Timer(Callback cb, float mSec, bool repeat);
+        void SetTimeRemaining(float seconds);
+        float m_seconds;
+        bool m_repeat;
 };
 
 
-class RepeatTimer: public Timer {
-    public:
-         Timer(float mSec, Callback cb);
-        ~RepeatTimer();
-}
+
 
 
 } // end namespace Spider
