@@ -1,17 +1,50 @@
 #include <stdexcept>
+#include <stdint.h>
 
 
 
 namespace Spider {
 
 using SpiderException = std::runtime_error;
- 
+using Callback = Return (*)(Input); 
 
+// Handles to running calls
+class Handle {
+    public:
+        Handle();
+        void cancel();
+        bool cancelled();
+        int GetSpiderID();
+        virtual ~Handle();
+    protected:
+        int m_spider_id;
+        bool m_cancelled;
+};
+
+
+class TimerHandle : public Handle {
+    public:
+        TimerHandle();
+        float when();
+    protected:
+        
+};
+
+using HandlePtr = std::auto_ptr<Handle>;
+using TimerHandlePtr = std::auto_ptr<TimerHandle>;
 
 void SetThreaded(bool threaded);
 
 bool IsRunning();
 bool IsThreaded();
+
+
+
+// Time-based calls
+HandlePtr CallSoon(Callback cb);
+TimerHandlePtr CallLater(float delay, Callback cb);
+TimerHandlePtr CallAt(float time, Callback cb);
+TimerHandlePtr CallEvery(float interval, Callback cb);
 
 
 

@@ -22,7 +22,7 @@ struct Input {
 
 
 //typedef Return (*Callback)(Input);
-using Callback = Return (*)(Input); 
+
 
 
 
