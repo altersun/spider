@@ -5,70 +5,36 @@
 
 namespace Spider {
 
+using ID = uint64_t;
 using SpiderException = std::runtime_error;
-using Callback = Return (*)(Input); 
-
-// Handles to running calls
-class Handle {
-    public:
-        Handle();
-        void cancel();
-        bool cancelled();
-        int GetSpiderID();
-        virtual ~Handle();
-    protected:
-        int m_spider_id;
-        bool m_cancelled;
-};
+using Callback = Return (*)(Input);
+using Seconds = float;
 
 
-class TimerHandle : public Handle {
-    public:
-        TimerHandle();
-        float when();
-    protected:
-        
-};
 
-using HandlePtr = std::auto_ptr<Handle>;
-using TimerHandlePtr = std::auto_ptr<TimerHandle>;
+
+
 
 void SetThreaded(bool threaded);
 
 bool IsRunning();
 bool IsThreaded();
+void Start();
+void Start(uint64_t stop_at_event); // TODO: Stop after a specific number of events???
+void Stop();
+
+// Set time in seconds between loop increments
+// Endpoint activity will wake the loop but 
+// if nothing happens then the loop will wake 
+// itself at this increment for maintanence tasks
+// Must be a positive non-zero number
+void SetLoopIncrement(Seconds seconds);
+Seconds GetLoopIncrement();
+
+ID AddFD(int fd, Callback callback);
+ID GetID(int fd);
 
 
 
-// Time-based calls
-HandlePtr CallSoon(Callback cb);
-TimerHandlePtr CallLater(float delay, Callback cb);
-TimerHandlePtr CallAt(float time, Callback cb);
-TimerHandlePtr CallEvery(float interval, Callback cb);
 
-
-
-template<typename... Ts>
-class ThreadHandle: public Handle {
-    public:
-        ThreadHandle();
-        ~ThreadHandle();
-        std::future<typename... Ts> GetResult();
-};
-
-
-class EventLoop {
-    private:
-         EventLoop() {}
-
-
-
-};
-
-} // end namespace Spider
-
-namespace Spider::Priority {
-    const unsigned int MAX = 128;
-    const unsigned int MIN = 0;    
-
-} // end namespace Spider::Priority
+}; // end Spider namespace 
