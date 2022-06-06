@@ -1,3 +1,4 @@
+#include <queue>
 #include <unordered_map>
 #include <unordered_set>
 
@@ -43,18 +44,15 @@ std::unordered_map<uint64_t, Spider::Callback> s_soon_callbacks;
 // Presently running threads
 //std::unordered_map<uint64_t, TODO_thread_type> s_active_threads;
 
-// "Private" functions
-void SpiderLoop();
-void AddLoopEvent(int fd);
-void CreateFdWatcher();
-Spider::ID GetNewID();
-
-// Private conversion functions
-int ConvertSecondsToTimeout(Spider::Seconds);
-::timespec ConvertSecondsToTimespec(Spider::Seconds);
-
-
 } // End anonymous namespace
+
+
+// // "Private" functions
+static void SpiderLoop();
+static void AddLoopEvent(int fd);
+static void RemoveLoopEvent(int fd);
+static void CreateFdWatcher();
+static Spider::ID GetNewID();
 
 
 bool Spider::IsRunning()
@@ -89,6 +87,16 @@ Spider::ID AddFD(int fd, Spider::Callback callback)
 }
 
 
+void RemoveFD(int fd)
+{
+    if (!s_fid_map.contains(fd)) {
+        return;
+    }
+
+    s_fid_map.erase(fd);
+}
+
+
 Spider::ID GetID(int fd)
 {
     if (!s_fid_map.contains(fd)) {
@@ -106,7 +114,7 @@ void CreateFdWatcher()
         return;
     }
     s_epoll_fd = ::epoll_create1(0);
-    if (s_epoll_events != 0) {
+    if (s_epoll_fd != 0) {
         // TODO: Bail
         throw Spider::SpiderException("Could not create loop");
     }
@@ -128,6 +136,15 @@ void AddLoopEvent(int fd)
 }
 
 
+void RemoveLoopEvent(int fd)
+{
+    // Cannot continue if epoll has not yet been set up
+    if (s_epoll_fd < 0) {
+        return;
+    }
+    ::epoll_ctl(s_epoll_fd, EPOLL_CTL_DEL, fd, NULL);
+}
+
 void SpiderLoop()
 {
     // Cannot continue if epoll has not yet been set up
@@ -136,6 +153,8 @@ void SpiderLoop()
     }
 
     while (s_running) {}
+        std::queue<Spider::Callback> queued_callbacks;
+
         // Call epoll, the heart of this whole system
         // TODO: Make a sigmask and fill it out
         int ready = epoll_pwait(s_epoll_fd, s_epoll_events, MAX_EVENTS, ConvertSecondsToTimeout(Spider::GetLoopIncrement()), NULL);
@@ -145,6 +164,26 @@ void SpiderLoop()
         s_event_counter += ready;
 
         // Epoll management here
+        for (int count = 0; count < ready; ++count)
+        {
+            int fd = s_epoll_events[count].data.fd;
+            if (!s_fid_map.contains(fd)) {
+                // fd may have been removed while waiting
+                // Do not act on it.
+                continue;
+            }
+            queued_callbacks.push(s_fid_map[fd].callback);
+        }
+
+        // Run through callbacks for ready FDs
+        while (!queued_callbacks.empty()) {
+            if (s_threaded) {
+                // TODO: Thread starts
+            } else {
+                queued_callbacks.front()();  
+            }
+            queued_callbacks.pop();
+        }
 
 
         // TODO: Maintenance stuff
@@ -195,13 +234,15 @@ int ConvertSecondsToTimeout(Spider::Seconds seconds)
 
 ::timespec ConvertSecondsToTimespec(Spider::Seconds seconds)
 {
-    ::timespec t = {0};
+    ::timespec ts = {0};
     if (seconds <= 0) {
-        return t;
+        return ts;
     }
+
+    ts.tv_nsec = static_cast<long>(100000*std::modf(seconds, &seconds));
+    ts.tv_sec = static_cast<time_t>(seconds);
     
-    // TODO: Implement for real
-    return t;
+    return ts;
 }
 
 

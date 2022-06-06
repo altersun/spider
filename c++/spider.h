@@ -5,9 +5,14 @@
 
 namespace Spider {
 
+
+using Return = int; // TODO: determine real return type
+using Input = void; // TODO: determine real input type
+using Callback = Return (*)(Input);
+//using Callback = Return (*)();
+
 using ID = uint64_t;
 using SpiderException = std::runtime_error;
-using Callback = Return (*)(Input);
 using Seconds = float;
 
 
@@ -32,8 +37,12 @@ void SetLoopIncrement(Seconds seconds);
 Seconds GetLoopIncrement();
 
 ID AddFD(int fd, Callback callback);
+void RemoveFD(int fd);
 ID GetID(int fd);
 
+// Convenience functions
+int ConvertSecondsToTimeout(Spider::Seconds);
+::timespec ConvertSecondsToTimespec(Spider::Seconds);
 
 
 
