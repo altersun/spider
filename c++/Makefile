@@ -1,16 +1,34 @@
+EXE := "spider_test.exe"
+OBJS = $(patsubst ./%.c,./%.o,$(wildcard ./*.c))
+OBJS += $(patsubst ./%.cpp,./%.opp,$(wildcard ./*.cpp))
+$(info $(OBJS))
 
-EXE = $(patsubst ./%.cpp,./%.exe,$(wildcard ./*.cpp))
-
-.PHONY: all clean
+.PHONY: all clean derp
 all: $(EXE)
 
 run: $(EXE)
-	@$(EXE)
+	@./$(EXE)
 
-%.exe: %.cpp
-	@$(CXX) -g --std=c++20 -o "$@" "$<"
-	@echo "Built test"
+$(EXE): $(OBJS)
+	@echo 'Linking source file(s) $(OBJS) together into $@...'
+	@$(CXX) -o "$@" $(OBJS)
+	@echo "Built $@"
+
+# Build cpp
+%.opp: %.cpp 
+	@echo 'Building source file $<...'
+	@$(CXX) --std=c++20 -g -c -o "$@" "$<" 
+	@echo 'Built $@'
+	@echo
+
+# Build c
+%.o: %.c 
+	@echo 'Building source file $<...'
+	@$(CC) -std=gnu11 -g -c -o "$@" "$<"
+	@echo 'Built $@'
+	@echo
 
 clean:
-	@rm -f $(EXE)	 	
+	@rm -f *.o* *.exe	
 	@echo "All clean!"
+

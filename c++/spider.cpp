@@ -1,24 +1,27 @@
+#include <cmath>
 #include <queue>
-#include <unordered_map>
+#include <map>
 #include <unordered_set>
 
 #include <sys/epoll.h>
 #include <sys/time.h>
 
-#include <spider.h>
-//#include <file_handler.h>
+#include "spider.h"
+
 
 namespace {
 
 // Spider Types
-struct fd_entry {
+/*struct fd_entry {
+    fd_entry(Spider::ID i, Spider::Callback cb) 
+        : id(i)
+        , callback(cb)
+        {}
     Spider::ID id;
     Spider::Callback callback;
-    fd_entry(Spider::ID id, Spider::Callback callback) 
-        : id(id)
-        , callback(callback)
-        {}
-};
+};*/
+
+using fd_entry = std::tuple<Spider::ID, Spider::Callback>;
 
 // Spider variables
 bool s_threaded = true;
@@ -35,14 +38,8 @@ struct epoll_event s_epoll_events[MAX_EVENTS] = {0};
 
 
 // Map FDs to callbacks
-std::unordered_map<int, fd_entry> s_fid_map;
+std::map<int, fd_entry> s_fid_map;
 
-
-// Iterate over these after waking up
-std::unordered_map<uint64_t, Spider::Callback> s_soon_callbacks;
-
-// Presently running threads
-//std::unordered_map<uint64_t, TODO_thread_type> s_active_threads;
 
 } // End anonymous namespace
 
@@ -76,18 +73,21 @@ void Spider::SetThreaded(bool threaded)
 }
 
 
-Spider::ID AddFD(int fd, Spider::Callback callback)
+Spider::ID Spider::AddFD(int fd, Spider::Callback callback)
 {
     if (s_fid_map.contains(fd)) {
         // TODO: Anthing better than excepting if entry exists?
         throw Spider::SpiderException("Cannot create duplicate entry for "+std::to_string(fd));
     }
-    s_fid_map[fd] = fd_entry(GetNewID(), callback);
+    Spider::ID new_id = GetNewID();
+    s_fid_map[fd] = fd_entry{new_id, callback};
     AddLoopEvent(fd);
+    
+    return new_id; 
 }
 
 
-void RemoveFD(int fd)
+void Spider::RemoveFD(int fd)
 {
     if (!s_fid_map.contains(fd)) {
         return;
@@ -102,7 +102,7 @@ Spider::ID GetID(int fd)
     if (!s_fid_map.contains(fd)) {
         return 0;
     }
-    return s_fid_map[fd].id;
+    return std::get<0>(s_fid_map[fd]);
 }
 
 
@@ -114,7 +114,7 @@ void CreateFdWatcher()
         return;
     }
     s_epoll_fd = ::epoll_create1(0);
-    if (s_epoll_fd != 0) {
+    if (s_epoll_fd < 0) {
         // TODO: Bail
         throw Spider::SpiderException("Could not create loop");
     }
@@ -152,12 +152,13 @@ void SpiderLoop()
         CreateFdWatcher();
     }
 
-    while (s_running) {}
+    while (s_running) {
         std::queue<Spider::Callback> queued_callbacks;
 
         // Call epoll, the heart of this whole system
         // TODO: Make a sigmask and fill it out
-        int ready = epoll_pwait(s_epoll_fd, s_epoll_events, MAX_EVENTS, ConvertSecondsToTimeout(Spider::GetLoopIncrement()), NULL);
+        int ready = epoll_pwait(s_epoll_fd, s_epoll_events, MAX_EVENTS, 
+            Spider::ConvertSecondsToTimeout(Spider::GetLoopIncrement()), NULL);
         if (ready < 0) {
             // TODO: Error handling
         }
@@ -172,7 +173,7 @@ void SpiderLoop()
                 // Do not act on it.
                 continue;
             }
-            queued_callbacks.push(s_fid_map[fd].callback);
+            queued_callbacks.push(std::get<1>(s_fid_map[fd]));
         }
 
         // Run through callbacks for ready FDs
@@ -222,7 +223,7 @@ Spider::Seconds Spider::GetLoopIncrement()
 }
 
 
-int ConvertSecondsToTimeout(Spider::Seconds seconds)
+int Spider::ConvertSecondsToTimeout(Spider::Seconds seconds)
 {
     // epoll timeouts are ints with millisec resolution
     if (seconds <= 0) {
@@ -232,7 +233,7 @@ int ConvertSecondsToTimeout(Spider::Seconds seconds)
 }
 
 
-::timespec ConvertSecondsToTimespec(Spider::Seconds seconds)
+::timespec Spider::ConvertSecondsToTimespec(Spider::Seconds seconds)
 {
     ::timespec ts = {0};
     if (seconds <= 0) {
@@ -262,7 +263,8 @@ void Spider::Start()
 }
 
 
-void Spider::Stop()
+int Spider::Stop()
 {
     s_running = false;
+    return 0;
 }

@@ -26,7 +26,7 @@ bool IsRunning();
 bool IsThreaded();
 void Start();
 void Start(uint64_t stop_at_event); // TODO: Stop after a specific number of events???
-void Stop();
+int Stop();
 
 // Set time in seconds between loop increments
 // Endpoint activity will wake the loop but 
@@ -41,8 +41,8 @@ void RemoveFD(int fd);
 ID GetID(int fd);
 
 // Convenience functions
-int ConvertSecondsToTimeout(Spider::Seconds);
-::timespec ConvertSecondsToTimespec(Spider::Seconds);
+int ConvertSecondsToTimeout(Seconds seconds);
+::timespec ConvertSecondsToTimespec(Seconds seconds);
 
 
 

@@ -1,7 +1,7 @@
 #include <exception>
 #include <memory>
 
-#include <spider.h>
+#include "spider.h"
 
 
 namespace Spider {
@@ -11,20 +11,25 @@ class TimerHandle
 {
     public:
         TimerHandle(Seconds s, bool repeat);
+        ~TimerHandle();
         Seconds GetAssignedTime();
-        Seconds GetTimeRemaing();
+        Seconds GetTimeRemaining();
         bool IsRepeating();
+        int GetFD();
         void Stop(); // Also serves as cancel for a non-repeating timer
     private: 
         Seconds m_time;
+        ::itimerspec m_spec;
         bool m_repeat;
         int m_fd;
 };
 
+using TimerHandlePtr = std::shared_ptr<TimerHandle>;
 
 
-TimerHandle CallLater(Seconds delay, Callback cb);
-TimerHandle CallEvery(Seconds increment, Callback cb);
+TimerHandlePtr CallEvery(Seconds increment, Callback cb);
+TimerHandlePtr CallLater(Seconds delay, Callback cb);
+
 
 
 
