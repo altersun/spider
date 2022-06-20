@@ -15,11 +15,6 @@ using ID = uint64_t;
 using SpiderException = std::runtime_error;
 using Seconds = float;
 
-
-
-
-
-
 void SetThreaded(bool threaded);
 
 bool IsRunning();
@@ -36,9 +31,18 @@ int Stop();
 void SetLoopIncrement(Seconds seconds);
 Seconds GetLoopIncrement();
 
+uint64_t GetLoopCount();
+Seconds GetRuntime();
+
+
 ID AddFD(int fd, Callback callback);
 void RemoveFD(int fd);
 ID GetID(int fd);
+
+// NOTE: These will run EVERY LOOP. Add with care!
+ID AddMaintenanceCall(Callback callback);
+ID CallOnce(Callback callback);
+void RemoveCall(ID id);
 
 // Convenience functions
 int ConvertSecondsToTimeout(Seconds seconds);

@@ -1,12 +1,14 @@
+#include <atomic>
 #include <cmath>
 #include <queue>
 #include <map>
-#include <unordered_set>
+#include <unordered_map>
 
 #include <sys/epoll.h>
 #include <sys/time.h>
 
 #include "spider.h"
+#include "logging.h"
 
 
 namespace {
@@ -24,11 +26,12 @@ namespace {
 using fd_entry = std::tuple<Spider::ID, Spider::Callback>;
 
 // Spider variables
-bool s_threaded = true;
+bool s_threaded = false;
 bool s_running = false;
 bool s_stopped = false;
-uint64_t s_event_counter = 0;
+std::atomic<uint64_t> s_event_counter = 0;
 uint64_t s_stop_at_event_count = 0;
+std::atomic<uint64_t> s_loop_counter = 0;
 Spider::Seconds s_increment = 0.01;
 
 // epoll variables
@@ -40,11 +43,16 @@ struct epoll_event s_epoll_events[MAX_EVENTS] = {0};
 // Map FDs to callbacks
 std::map<int, fd_entry> s_fid_map;
 
+// Map Spider IDs to maintenance functions
+std::unordered_map<Spider::ID, Spider::Callback> s_maintenance_map;
+
+// Map Spider IDs to one-off callbacks
+std::unordered_map<Spider::ID, Spider::Callback> s_once_map;
 
 } // End anonymous namespace
 
 
-// // "Private" functions
+// "Private" functions
 static void SpiderLoop();
 static void AddLoopEvent(int fd);
 static void RemoveLoopEvent(int fd);
@@ -111,6 +119,7 @@ void CreateFdWatcher()
     if (s_epoll_fd >= 0) {
         // Already created it!
         // TODO: Throw exception?
+        Spider::Log::Log(Spider::Log::ERROR, "Cannot create epoll!");
         return;
     }
     s_epoll_fd = ::epoll_create1(0);
@@ -129,7 +138,8 @@ void AddLoopEvent(int fd)
     if (s_epoll_fd < 0) {
         CreateFdWatcher();
     }
-
+    
+    Spider::Log::Log(Spider::Log::INFO, "Added fd "+std::to_string(fd));
     struct epoll_event ev;
     ev.events = EPOLLIN;
     ::epoll_ctl(s_epoll_fd, EPOLL_CTL_ADD, fd, &ev);
@@ -162,6 +172,7 @@ void SpiderLoop()
         if (ready < 0) {
             // TODO: Error handling
         }
+
         s_event_counter += ready;
 
         // Epoll management here
@@ -186,8 +197,20 @@ void SpiderLoop()
             queued_callbacks.pop();
         }
 
+        // Maintenance stuff
+        for (const auto& [ID, callback] : s_maintenance_map) {
+            // TODO: Threading?
+            callback();
+        }
 
-        // TODO: Maintenance stuff
+        // One-offs
+        for (const auto& [id, callback] : s_once_map) {
+            // TODO: Threading?
+            callback();
+        }
+        s_once_map.clear();
+
+        s_loop_counter++;
     }
 
 }
@@ -197,14 +220,13 @@ Spider::ID GetNewID()
 {
     // NOTE: For now just use a monotonically increasing uint
     // TODO: Something more elegant?
-    static Spider::ID id = 1;
-    Spider::ID ret = id;
+    static std::atomic<Spider::ID> id = 0;
     
     // Reserve 0 for errors
     if (++id == 0) {
         id+=1;
     }
-    return ret; 
+    return id; 
 }
 
 
@@ -253,6 +275,7 @@ void Spider::Start(uint64_t stop_at_event = 0)
         s_stop_at_event_count = true;
     }
     s_running = true;
+    Spider::Log::Log(Spider::Log::INFO, "Started poll");
     SpiderLoop();
 }
 
@@ -267,4 +290,41 @@ int Spider::Stop()
 {
     s_running = false;
     return 0;
+}
+
+
+uint64_t Spider::GetLoopCount()
+{
+    return s_loop_counter;
+}
+
+
+Spider::Seconds Spider::GetRuntime()
+{
+    // TODO: Implement this
+    return 0;
+}
+
+
+Spider::ID Spider::AddMaintenanceCall(Spider::Callback callback) {
+    Spider::ID id = GetNewID();
+    s_maintenance_map[id] = callback;
+    return id;
+}
+
+
+Spider::ID Spider::CallOnce(Spider::Callback callback) {
+    Spider::ID id = GetNewID();
+    s_once_map[id] = callback;
+    return id;
+}
+
+
+void Spider::RemoveCall(Spider::ID id)
+{
+    if (s_maintenance_map.contains(id)) {
+        s_maintenance_map.erase(id);
+    } else if (s_once_map.contains(id)) {
+        s_once_map.erase(id);
+    }
 }
