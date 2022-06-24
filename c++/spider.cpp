@@ -119,7 +119,7 @@ void CreateFdWatcher()
     if (s_epoll_fd >= 0) {
         // Already created it!
         // TODO: Throw exception?
-        Spider::Log::Log(Spider::Log::ERROR, "Cannot create epoll!");
+        Spider::Log::Log_Basic(Spider::Log::ERROR, "Cannot create epoll!");
         return;
     }
     s_epoll_fd = ::epoll_create1(0);
@@ -139,7 +139,7 @@ void AddLoopEvent(int fd)
         CreateFdWatcher();
     }
     
-    Spider::Log::Log(Spider::Log::INFO, "Added fd "+std::to_string(fd));
+    Spider::Log::Log_Basic(Spider::Log::INFO, "Added fd "+std::to_string(fd));
     struct epoll_event ev;
     ev.events = EPOLLIN;
     ::epoll_ctl(s_epoll_fd, EPOLL_CTL_ADD, fd, &ev);
@@ -251,7 +251,7 @@ int Spider::ConvertSecondsToTimeout(Spider::Seconds seconds)
     if (seconds <= 0) {
         return 0;
     }
-    return static_cast<int>(seconds/1000.0);
+    return static_cast<int>(seconds*1000.0);
 }
 
 
@@ -275,7 +275,7 @@ void Spider::Start(uint64_t stop_at_event = 0)
         s_stop_at_event_count = true;
     }
     s_running = true;
-    Spider::Log::Log(Spider::Log::INFO, "Started poll");
+    Spider::Log::Log_Basic(Spider::Log::INFO, "Started poll");
     SpiderLoop();
 }
 
