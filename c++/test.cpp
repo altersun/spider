@@ -28,18 +28,24 @@ Spider::Return every_cb(Spider::Input)
 
 int main()
 {
-    std::cout << "GADS DABNIT!!" << std::endl;
+    Spider::Log::SetLevel(Spider::Log::DEBUG);
     Spider::Log_INFO("Whatup");
 
 
+
     Spider::CallEvery(2.1, every_cb);
-    Spider::CallLater(20.2, Spider::Stop);
+    if (!Spider::CallLater(1.2, Spider::Stop)) {
+        Spider::Log_ERROR("Could not create exit callback!!!");
+        return -1;
+    }
     Spider::AddMaintenanceCall(print_often);
     //Spider::SetLoopIncrement(0.1);
     
     Spider::Log_INFO("Hell yeah");
 
     Spider::Start();
+
+    Spider::Log_INFO("So long!");
 
     return 0;
 }

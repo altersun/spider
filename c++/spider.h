@@ -1,6 +1,7 @@
+#include <errno.h>
 #include <stdexcept>
 #include <stdint.h>
-
+#include <string.h>
 
 
 namespace Spider {

@@ -262,7 +262,7 @@ int Spider::ConvertSecondsToTimeout(Spider::Seconds seconds)
         return ts;
     }
 
-    ts.tv_nsec = static_cast<long>(100000*std::modf(seconds, &seconds));
+    ts.tv_nsec = static_cast<long>(::pow(10.0, 9.0)*std::modf(seconds, &seconds));
     ts.tv_sec = static_cast<time_t>(seconds);
     
     return ts;

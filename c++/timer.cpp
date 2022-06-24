@@ -4,6 +4,7 @@
 #include <unordered_map>
 #include <unistd.h>
 
+#include "logging.h"
 #include "timer.h"
 
 
@@ -34,20 +35,25 @@ Spider::TimerHandle::TimerHandle(Spider::Seconds seconds, bool repeat)
     // TODO: Make this #define to use CLOCK_BOOTTIME if ALARM not supported
     // TODO: See if the TFD_NONBLOCK flag is needed for the 2nd argument
     // https://man7.org/linux/man-pages/man2/timerfd_create.2.html
-    int m_fd = timerfd_create(CLOCK_BOOTTIME_ALARM, 0);
-    if (m_fd == -1) {
-        throw Spider::SpiderException("Could not obtain timer!");
+    int m_fd = timerfd_create(CLOCK_REALTIME, 0);
+    if (m_fd < 0) {
+        throw Spider::SpiderException("Could not obtain timer, exit code "+std::string(::strerror(errno)));
     }
 
     m_spec = {0};
     ::timespec ts = Spider::ConvertSecondsToTimespec(m_time);
+    Spider::Log_DEBUG("Timer set with: "+std::to_string(ts.tv_sec)+"."+std::to_string(ts.tv_nsec));
     if (m_repeat) {
         m_spec.it_interval = ts;
     } else {
         m_spec.it_value = ts;
     }
 
-    timerfd_settime(m_fd, 0, &m_spec, NULL);
+    if (timerfd_settime(m_fd, 0, &m_spec, NULL) < 0) {
+        throw Spider::SpiderException("Could not set timer!");
+    }
+    Spider::Log_DEBUG("Exiting timer constructor");
+    m_id = 0;
 }
 
 
@@ -86,15 +92,19 @@ Spider::TimerHandlePtr AddTimer(Spider::Seconds sec, Spider::Callback cb, bool r
 {
     Spider::TimerHandlePtr timer_p = nullptr;
     try {
-        Spider::TimerHandlePtr timer_p = std::make_shared<Spider::TimerHandle>(sec, repeat);
-    } catch(Spider::SpiderException) {
+        timer_p = std::make_shared<Spider::TimerHandle>(sec, repeat);
+    } catch (Spider::SpiderException &e) {
+        Spider::Log_ERROR(e.what());
         return nullptr;
     }
+
+    Spider::Log_DEBUG("Created Timer with FD "+std::to_string(timer_p->GetFD()));
 
     try {
         // TODO: Do something with the ID
         Spider::AddFD(timer_p->GetFD(), cb);
-    } catch(Spider::SpiderException) {
+    } catch(Spider::SpiderException &e) {
+        Spider::Log_DEBUG(e.what());
         timer_p.reset();
         return nullptr;
     }
