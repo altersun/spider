@@ -22,7 +22,7 @@ bool IsRunning();
 bool IsThreaded();
 void Start();
 void Start(uint64_t stop_at_event); // TODO: Stop after a specific number of events???
-int Stop();
+Return Stop(Input);
 
 // Set time in seconds between loop increments
 // Endpoint activity will wake the loop but 
@@ -36,6 +36,7 @@ uint64_t GetLoopCount();
 Seconds GetRuntime();
 
 
+
 ID AddFD(int fd, Callback callback);
 void RemoveFD(int fd);
 ID GetID(int fd);
@@ -46,8 +47,9 @@ ID CallOnce(Callback callback);
 void RemoveCall(ID id);
 
 // Convenience functions
-int ConvertSecondsToTimeout(Seconds seconds);
+int SecondsToTimeout(Seconds seconds);
 ::timespec ConvertSecondsToTimespec(Seconds seconds);
+std::string TimespecToString(::timespec ts);
 
 
 

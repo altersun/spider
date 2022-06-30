@@ -34,12 +34,17 @@ int main()
 
 
     Spider::CallEvery(2.1, every_cb);
-    if (!Spider::CallLater(1.2, Spider::Stop)) {
+    /*if (!Spider::CallLater(3.0, every_cb)) {
+        Spider::Log_ERROR("Could not create simple callback!!!");
+        return -1;
+    }*/
+
+    if (!Spider::CallLater(3.0, Spider::Stop)) {
         Spider::Log_ERROR("Could not create exit callback!!!");
         return -1;
     }
-    Spider::AddMaintenanceCall(print_often);
-    //Spider::SetLoopIncrement(0.1);
+    //Spider::AddMaintenanceCall(print_often);
+    Spider::SetLoopIncrement(1.0);
     
     Spider::Log_INFO("Hell yeah");
 

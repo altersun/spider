@@ -24,6 +24,7 @@ Spider::TimerHandle::~TimerHandle()
 
 int Spider::TimerHandle::GetFD() 
 {
+    Spider::Log_DEBUG("Return timerfd with fd value "+std::to_string(m_fd));
     return m_fd;
 }
 
@@ -35,14 +36,14 @@ Spider::TimerHandle::TimerHandle(Spider::Seconds seconds, bool repeat)
     // TODO: Make this #define to use CLOCK_BOOTTIME if ALARM not supported
     // TODO: See if the TFD_NONBLOCK flag is needed for the 2nd argument
     // https://man7.org/linux/man-pages/man2/timerfd_create.2.html
-    int m_fd = timerfd_create(CLOCK_REALTIME, 0);
+    m_fd = timerfd_create(CLOCK_BOOTTIME, 0);
     if (m_fd < 0) {
         throw Spider::SpiderException("Could not obtain timer, exit code "+std::string(::strerror(errno)));
     }
 
     m_spec = {0};
     ::timespec ts = Spider::ConvertSecondsToTimespec(m_time);
-    Spider::Log_DEBUG("Timer set with: "+std::to_string(ts.tv_sec)+"."+std::to_string(ts.tv_nsec));
+    Spider::Log_DEBUG("Timer set with: "+Spider::TimespecToString(ts));
     if (m_repeat) {
         m_spec.it_interval = ts;
     } else {
@@ -52,8 +53,6 @@ Spider::TimerHandle::TimerHandle(Spider::Seconds seconds, bool repeat)
     if (timerfd_settime(m_fd, 0, &m_spec, NULL) < 0) {
         throw Spider::SpiderException("Could not set timer!");
     }
-    Spider::Log_DEBUG("Exiting timer constructor");
-    m_id = 0;
 }
 
 

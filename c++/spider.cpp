@@ -1,4 +1,6 @@
+#include <algorithm>
 #include <atomic>
+#include <chrono>
 #include <cmath>
 #include <queue>
 #include <map>
@@ -27,12 +29,14 @@ using fd_entry = std::tuple<Spider::ID, Spider::Callback>;
 
 // Spider variables
 bool s_threaded = false;
-bool s_running = false;
-bool s_stopped = false;
+std::atomic_bool s_running = false;
+std::atomic_bool s_stopped = false;
 std::atomic<uint64_t> s_event_counter = 0;
 uint64_t s_stop_at_event_count = 0;
 std::atomic<uint64_t> s_loop_counter = 0;
 Spider::Seconds s_increment = 0.01;
+std::chrono::time_point<std::chrono::steady_clock> s_starttime;
+Spider::Seconds s_runtime = 0.0;
 
 // epoll variables
 const unsigned int MAX_EVENTS = 100;
@@ -162,16 +166,20 @@ void SpiderLoop()
         CreateFdWatcher();
     }
 
+    s_starttime = std::chrono::steady_clock::now();
+
     while (s_running) {
         std::queue<Spider::Callback> queued_callbacks;
 
         // Call epoll, the heart of this whole system
         // TODO: Make a sigmask and fill it out
+        int timeout = Spider::SecondsToTimeout(Spider::GetLoopIncrement());
         int ready = epoll_pwait(s_epoll_fd, s_epoll_events, MAX_EVENTS, 
-            Spider::ConvertSecondsToTimeout(Spider::GetLoopIncrement()), NULL);
+            timeout, NULL);
         if (ready < 0) {
             // TODO: Error handling
         }
+        Spider::Log_DEBUG("Waiting with delay "+std::to_string(timeout)+ " at time "+std::to_string(Spider::GetRuntime()));
 
         s_event_counter += ready;
 
@@ -212,7 +220,6 @@ void SpiderLoop()
 
         s_loop_counter++;
     }
-
 }
 
 // Get a new ID to assign to a new Spider item
@@ -245,7 +252,7 @@ Spider::Seconds Spider::GetLoopIncrement()
 }
 
 
-int Spider::ConvertSecondsToTimeout(Spider::Seconds seconds)
+int Spider::SecondsToTimeout(Spider::Seconds seconds)
 {
     // epoll timeouts are ints with millisec resolution
     if (seconds <= 0) {
@@ -286,8 +293,9 @@ void Spider::Start()
 }
 
 
-int Spider::Stop()
+Spider::Return Spider::Stop(Spider::Input)
 {
+    Spider::Log_DEBUG("Stopping loop after runtime (seconds): "+std::to_string(Spider::GetRuntime()));
     s_running = false;
     return 0;
 }
@@ -301,8 +309,10 @@ uint64_t Spider::GetLoopCount()
 
 Spider::Seconds Spider::GetRuntime()
 {
-    // TODO: Implement this
-    return 0;
+    if (!s_running) {
+        return 0.0;
+    }
+    return std::chrono::duration<Spider::Seconds>(std::chrono::steady_clock::now()-s_starttime).count();
 }
 
 
@@ -327,4 +337,13 @@ void Spider::RemoveCall(Spider::ID id)
     } else if (s_once_map.contains(id)) {
         s_once_map.erase(id);
     }
+}
+
+
+std::string Spider::TimespecToString(::timespec ts)
+{
+    static const size_t NSEC_LEN = 9;
+    auto raw_nsec = std::to_string(ts.tv_nsec);
+    auto nsec = std::string(NSEC_LEN - std::min(NSEC_LEN, raw_nsec.length()), '0') + raw_nsec;
+    return std::to_string(ts.tv_sec) + "." + nsec;
 }
