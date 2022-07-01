@@ -24,7 +24,7 @@ $(EXE): $(OBJS)
 # Build c
 %.o: %.c 
 	@echo 'Building source file $<...'
-	@$(CC) -std=gnu11 -g -c -o "$@" "$<"
+	@$(CC) -std=gnu18 -g -c -o "$@" "$<"
 	@echo 'Built $@'
 	@echo
 

@@ -46,9 +46,9 @@ Spider::TimerHandle::TimerHandle(Spider::Seconds seconds, bool repeat)
     Spider::Log_DEBUG("Timer set with: "+Spider::TimespecToString(ts));
     if (m_repeat) {
         m_spec.it_interval = ts;
-    } else {
-        m_spec.it_value = ts;
     }
+    m_spec.it_value = ts;
+    
 
     if (timerfd_settime(m_fd, 0, &m_spec, NULL) < 0) {
         throw Spider::SpiderException("Could not set timer!");
@@ -99,9 +99,23 @@ Spider::TimerHandlePtr AddTimer(Spider::Seconds sec, Spider::Callback cb, bool r
 
     Spider::Log_DEBUG("Created Timer with FD "+std::to_string(timer_p->GetFD()));
 
+    // Timers need a little extra love in their callbacks
+    Spider::Callback cbplus;
+    if (!repeat) {
+        cbplus =[&](Spider::Input) {
+            cb();
+            Spider::Log_DEBUG("Completed timeout for fd "+std::to_string(timer_p->GetFD()));
+            timer_p->Stop();
+            return 0;   
+        };
+    } else {
+        cbplus = cb;
+    }
+
+    // Add fd and callback to main spider loop
     try {
         // TODO: Do something with the ID
-        Spider::AddFD(timer_p->GetFD(), cb);
+        Spider::AddFD(timer_p->GetFD(), cbplus);
     } catch(Spider::SpiderException &e) {
         Spider::Log_DEBUG(e.what());
         timer_p.reset();
@@ -117,7 +131,6 @@ Spider::TimerHandlePtr AddTimer(Spider::Seconds sec, Spider::Callback cb, bool r
 
 Spider::TimerHandlePtr Spider::CallLater(Spider::Seconds delay, Spider::Callback cb)
 {
-    // TODO: Wrap callback in something that closes timer...by calling stop??
     return AddTimer(delay, cb, false);
 }
 

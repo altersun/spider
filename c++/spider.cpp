@@ -174,35 +174,37 @@ void SpiderLoop()
         // Call epoll, the heart of this whole system
         // TODO: Make a sigmask and fill it out
         int timeout = Spider::SecondsToTimeout(Spider::GetLoopIncrement());
+        Spider::Log_DEBUG("Waiting with delay "+std::to_string(timeout)+ " at time "+std::to_string(Spider::GetRuntime()));
         int ready = epoll_pwait(s_epoll_fd, s_epoll_events, MAX_EVENTS, 
             timeout, NULL);
         if (ready < 0) {
             // TODO: Error handling
-        }
-        Spider::Log_DEBUG("Waiting with delay "+std::to_string(timeout)+ " at time "+std::to_string(Spider::GetRuntime()));
+        } else if (ready > 0) { 
+        
+            Spider::Log_DEBUG("FDs ready: "+std::to_string(ready));
+            s_event_counter += ready;
 
-        s_event_counter += ready;
-
-        // Epoll management here
-        for (int count = 0; count < ready; ++count)
-        {
-            int fd = s_epoll_events[count].data.fd;
-            if (!s_fid_map.contains(fd)) {
-                // fd may have been removed while waiting
-                // Do not act on it.
-                continue;
+            // Epoll management here
+            for (int count = 0; count < ready; ++count)
+                {
+                int fd = s_epoll_events[count].data.fd;
+                if (!s_fid_map.contains(fd)) {
+                    // fd may have been removed while waiting
+                    // Do not act on it.
+                    continue;
+                }
+                queued_callbacks.push(std::get<1>(s_fid_map[fd]));
             }
-            queued_callbacks.push(std::get<1>(s_fid_map[fd]));
-        }
 
-        // Run through callbacks for ready FDs
-        while (!queued_callbacks.empty()) {
-            if (s_threaded) {
-                // TODO: Thread starts
-            } else {
-                queued_callbacks.front()();  
+            // Run through callbacks for ready FDs
+            while (!queued_callbacks.empty()) {
+                if (s_threaded) {
+                    // TODO: Thread starts
+                } else {
+                    queued_callbacks.front()();  
+                }
+                queued_callbacks.pop();
             }
-            queued_callbacks.pop();
         }
 
         // Maintenance stuff

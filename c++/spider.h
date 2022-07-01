@@ -1,4 +1,5 @@
 #include <errno.h>
+#include <functional>
 #include <stdexcept>
 #include <stdint.h>
 #include <string.h>
@@ -9,8 +10,8 @@ namespace Spider {
 
 using Return = int; // TODO: determine real return type
 using Input = void; // TODO: determine real input type
-using Callback = Return (*)(Input);
-//using Callback = Return (*)();
+using Callback = std::function<Return(Input)>;
+
 
 using ID = uint64_t;
 using SpiderException = std::runtime_error;
