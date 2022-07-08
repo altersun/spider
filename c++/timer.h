@@ -1,5 +1,6 @@
 #include <exception>
 #include <memory>
+#include <stdint.h>
 
 #include "spider.h"
 
@@ -24,6 +25,7 @@ class TimerHandle
         bool m_repeat;
         int m_fd;
         ID m_id;
+        uint64_t m_expirations;
 };
 
 using TimerHandlePtr = std::shared_ptr<TimerHandle>;

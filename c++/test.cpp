@@ -32,8 +32,8 @@ int main()
     Spider::Log_INFO("Whatup");
 
 
-
-    //Spider::CallEvery(2.1, every_cb);
+    Spider::CallOnce(every_cb);
+    Spider::CallEvery(2.1, every_cb);
     /*if (!Spider::CallLater(3.0, every_cb)) {
         Spider::Log_ERROR("Could not create simple callback!!!");
         return -1;

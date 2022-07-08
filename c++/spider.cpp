@@ -87,7 +87,7 @@ void Spider::SetThreaded(bool threaded)
 
 Spider::ID Spider::AddFD(int fd, Spider::Callback callback)
 {
-    if (s_fid_map.contains(fd)) {
+    if (s_fid_map.count(fd) > 0) {
         // TODO: Anthing better than excepting if entry exists?
         throw Spider::SpiderException("Cannot create duplicate entry for "+std::to_string(fd));
     }
@@ -101,7 +101,7 @@ Spider::ID Spider::AddFD(int fd, Spider::Callback callback)
 
 void Spider::RemoveFD(int fd)
 {
-    if (!s_fid_map.contains(fd)) {
+    if (!s_fid_map.count(fd) > 0) {
         return;
     }
 
@@ -111,7 +111,7 @@ void Spider::RemoveFD(int fd)
 
 Spider::ID GetID(int fd)
 {
-    if (!s_fid_map.contains(fd)) {
+    if (!s_fid_map.count(fd) > 0) {
         return 0;
     }
     return std::get<0>(s_fid_map[fd]);
@@ -143,7 +143,7 @@ void AddLoopEvent(int fd)
         CreateFdWatcher();
     }
     
-    Spider::Log::Log_Basic(Spider::Log::INFO, "Added fd "+std::to_string(fd));
+    Spider::Log_DEBUG("Added fd "+std::to_string(fd));
     struct epoll_event ev;
     ev.events = EPOLLIN;
     ::epoll_ctl(s_epoll_fd, EPOLL_CTL_ADD, fd, &ev);
@@ -185,14 +185,15 @@ void SpiderLoop()
             s_event_counter += ready;
 
             // Epoll management here
-            for (int count = 0; count < ready; ++count)
-                {
+            for (int count = 0; count < ready; count++) {
                 int fd = s_epoll_events[count].data.fd;
-                if (!s_fid_map.contains(fd)) {
+                Spider::Log_DEBUG("BLAFFF");
+                if (s_fid_map.count(fd) > 0) {
                     // fd may have been removed while waiting
                     // Do not act on it.
                     continue;
                 }
+                Spider::Log_DEBUG("FLAAAARG");
                 queued_callbacks.push(std::get<1>(s_fid_map[fd]));
             }
 
@@ -200,8 +201,13 @@ void SpiderLoop()
             while (!queued_callbacks.empty()) {
                 if (s_threaded) {
                     // TODO: Thread starts
+                    queued_callbacks.front()();
                 } else {
-                    queued_callbacks.front()();  
+                    try {
+                        queued_callbacks.front()();  
+                    } catch (const std::bad_function_call b) {
+                        Spider::Log_ERROR("Could not run callback: "+std::string(b.what()));
+                    }
                 }
                 queued_callbacks.pop();
             }
@@ -334,9 +340,9 @@ Spider::ID Spider::CallOnce(Spider::Callback callback) {
 
 void Spider::RemoveCall(Spider::ID id)
 {
-    if (s_maintenance_map.contains(id)) {
+    if (s_maintenance_map.count(id) > 0) {
         s_maintenance_map.erase(id);
-    } else if (s_once_map.contains(id)) {
+    } else if (s_once_map.count(id) > 0) {
         s_once_map.erase(id);
     }
 }

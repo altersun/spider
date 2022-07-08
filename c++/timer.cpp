@@ -1,4 +1,5 @@
 #include <cmath>
+#include <fcntl.h>
 #include <sys/time.h>
 #include <sys/timerfd.h>
 #include <unordered_map>
@@ -14,6 +15,8 @@ namespace {
 }
 
 static Spider::TimerHandlePtr AddTimer(Spider::Seconds sec, Spider::Callback cb, bool repeat);
+static uint64_t ReadTimerFd(Spider::TimerHandlePtr t_ptr);
+static Spider::Return TimerCallback(Spider::TimerHandlePtr timer_p, Spider::Callback cb);
 
 
 Spider::TimerHandle::~TimerHandle()
@@ -41,6 +44,12 @@ Spider::TimerHandle::TimerHandle(Spider::Seconds seconds, bool repeat)
         throw Spider::SpiderException("Could not obtain timer, exit code "+std::string(::strerror(errno)));
     }
 
+    // Make fd non-blocking so we don't stall on it in the case of a mis-timed read
+    int ret = ::fcntl(m_fd, F_SETFL, O_NONBLOCK);
+    if (ret < 0) {
+        throw Spider::SpiderException("Could make timer read non-blocking, exit code "+std::string(::strerror(errno)));
+    }
+
     m_spec = {0};
     ::timespec ts = Spider::ConvertSecondsToTimespec(m_time);
     Spider::Log_DEBUG("Timer set with: "+Spider::TimespecToString(ts));
@@ -53,6 +62,7 @@ Spider::TimerHandle::TimerHandle(Spider::Seconds seconds, bool repeat)
     if (timerfd_settime(m_fd, 0, &m_spec, NULL) < 0) {
         throw Spider::SpiderException("Could not set timer!");
     }
+    m_expirations = 0;
 }
 
 
@@ -87,6 +97,22 @@ void Spider::TimerHandle::Stop()
 }
 
 
+Spider::Return TimerCallback(Spider::TimerHandlePtr timer_p, Spider::Callback cb)
+{
+
+    Spider::Log_DEBUG("Starting timeout for fd "+std::to_string(timer_p->GetFD()));
+
+    ReadTimerFd(timer_p);
+    Spider::Return ret = cb();
+    Spider::Log_DEBUG("Completed timeout for fd "+std::to_string(timer_p->GetFD()));
+    if (!timer_p->IsRepeating()) {
+        timer_p->Stop();
+    }
+    return ret;
+}
+
+
+
 Spider::TimerHandlePtr AddTimer(Spider::Seconds sec, Spider::Callback cb, bool repeat)
 {
     Spider::TimerHandlePtr timer_p = nullptr;
@@ -99,23 +125,10 @@ Spider::TimerHandlePtr AddTimer(Spider::Seconds sec, Spider::Callback cb, bool r
 
     Spider::Log_DEBUG("Created Timer with FD "+std::to_string(timer_p->GetFD()));
 
-    // Timers need a little extra love in their callbacks
-    Spider::Callback cbplus;
-    if (!repeat) {
-        cbplus =[&](Spider::Input) {
-            cb();
-            Spider::Log_DEBUG("Completed timeout for fd "+std::to_string(timer_p->GetFD()));
-            timer_p->Stop();
-            return 0;   
-        };
-    } else {
-        cbplus = cb;
-    }
-
     // Add fd and callback to main spider loop
     try {
         // TODO: Do something with the ID
-        Spider::AddFD(timer_p->GetFD(), cbplus);
+        Spider::AddFD(timer_p->GetFD(), std::bind(TimerCallback,timer_p,cb));
     } catch(Spider::SpiderException &e) {
         Spider::Log_DEBUG(e.what());
         timer_p.reset();
@@ -138,4 +151,14 @@ Spider::TimerHandlePtr Spider::CallLater(Spider::Seconds delay, Spider::Callback
 Spider::TimerHandlePtr Spider::CallEvery(Spider::Seconds increment, Spider::Callback cb)
 {
     return AddTimer(increment, cb, true);
+}
+
+
+uint64_t ReadTimerFd(Spider::TimerHandlePtr t_ptr)
+{
+    uint64_t expirations = 0;
+    if (::read(t_ptr->GetFD(), reinterpret_cast<void*>(&expirations), sizeof(expirations)) < 0) {
+        Spider::Log_ERROR("Could not read expirations from timer, exit code "+std::string(::strerror(errno)));
+    }
+    return expirations;
 }
