@@ -91,6 +91,9 @@ Spider::ID Spider::AddFD(int fd, Spider::Callback callback)
         // TODO: Anthing better than excepting if entry exists?
         throw Spider::SpiderException("Cannot create duplicate entry for "+std::to_string(fd));
     }
+    if (callback == nullptr) {
+        throw Spider::SpiderException("Cannot register a null callback for "+std::to_string(fd));
+    }
     Spider::ID new_id = GetNewID();
     s_fid_map[fd] = fd_entry{new_id, callback};
     AddLoopEvent(fd);
@@ -144,8 +147,9 @@ void AddLoopEvent(int fd)
     }
     
     Spider::Log_DEBUG("Added fd "+std::to_string(fd));
-    struct epoll_event ev;
+    struct epoll_event ev = {0};
     ev.events = EPOLLIN;
+    ev.data.fd = fd;
     ::epoll_ctl(s_epoll_fd, EPOLL_CTL_ADD, fd, &ev);
 }
 
@@ -187,24 +191,30 @@ void SpiderLoop()
             // Epoll management here
             for (int count = 0; count < ready; count++) {
                 int fd = s_epoll_events[count].data.fd;
-                Spider::Log_DEBUG("BLAFFF");
-                if (s_fid_map.count(fd) > 0) {
+                Spider::Log_DEBUG("Handling ready fd "+std::to_string(fd));
+                if (s_fid_map.count(fd) == 0) {
                     // fd may have been removed while waiting
                     // Do not act on it.
                     continue;
                 }
                 Spider::Log_DEBUG("FLAAAARG");
-                queued_callbacks.push(std::get<1>(s_fid_map[fd]));
+                Spider::Callback cb = std::get<1>(s_fid_map[fd]);
+                if (cb == nullptr) {
+                    Spider::Log_ERROR("Retrieved null callback for fd "+std::to_string(fd));
+                    continue;
+                }
+                queued_callbacks.push(cb);
             }
 
             // Run through callbacks for ready FDs
             while (!queued_callbacks.empty()) {
+                auto to_call = queued_callbacks.front();
                 if (s_threaded) {
                     // TODO: Thread starts
-                    queued_callbacks.front()();
+                    to_call();
                 } else {
                     try {
-                        queued_callbacks.front()();  
+                        to_call(); 
                     } catch (const std::bad_function_call b) {
                         Spider::Log_ERROR("Could not run callback: "+std::string(b.what()));
                     }
