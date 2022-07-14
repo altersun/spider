@@ -22,31 +22,44 @@ Spider::Return print_often(Spider::Input)
 Spider::Return every_cb(Spider::Input)
 {
     auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
-    std::cout << "TIME: " << now << std::endl;
+    std::cout << "System time " << now << " vs Loop time " << Spider::GetRuntime() << std::endl;
     return 0;
 }
 
 int main()
 {
-    Spider::Log::SetLevel(Spider::Log::DEBUG);
+    Spider::Log::SetLevel(Spider::Log::INFO);
     Spider::Log_INFO("Whatup");
 
 
-    Spider::CallOnce(every_cb);
-    Spider::CallEvery(2.1, every_cb);
-    /*if (!Spider::CallLater(3.0, every_cb)) {
-        Spider::Log_ERROR("Could not create simple callback!!!");
+    Spider::CallOnce([](){Spider::Log_INFO("Testing CallOnce!");return 0;});
+    
+    // CallEvery test
+    auto tp = Spider::CallEvery(2.1, every_cb);
+    if (!tp ) {
+        Spider::Log_ERROR("CallEvery test setup failed!");
         return -1;
-    }*/
+    }
 
-    if (!Spider::CallLater(3.0, Spider::Stop)) {
+    // CallOnce test 
+    Spider::Callback once_test = [&] {
+        Spider::Log_INFO("Stopping timer with fd "+std::to_string(tp->GetFD()));
+        tp->Stop();
+        return 0;
+    };
+    if (!Spider::CallLater(5.0, once_test)) {
+        Spider::Log_ERROR("CallLater 2 test setup failed!");
+        return -1;
+    }
+
+    // CallLater test again, but this time to stop things
+    if (!Spider::CallLater(8.0, Spider::Stop)) {
         Spider::Log_ERROR("Could not create exit callback!!!");
         return -1;
     }
-    //Spider::AddMaintenanceCall(print_often);
-    Spider::SetLoopIncrement(1.0);
-    
-    Spider::Log_INFO("Hell yeah");
+
+
+    Spider::SetLoopIncrement(0.05);
 
     Spider::Start();
 
