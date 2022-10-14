@@ -2,7 +2,7 @@
 #include <memory>
 #include <stdint.h>
 
-#include "spider.h"
+#include "spider.hpp"
 
 
 namespace Spider {

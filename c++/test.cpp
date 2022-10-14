@@ -2,9 +2,9 @@
 #include <iostream>
 
 
-#include "spider.h"
-#include "logging.h"
-#include "timer.h"
+#include "spider.hpp"
+#include "logging.hpp"
+#include "timer.hpp"
 
 
 

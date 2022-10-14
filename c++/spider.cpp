@@ -9,8 +9,14 @@
 #include <sys/epoll.h>
 #include <sys/time.h>
 
-#include "spider.h"
-#include "logging.h"
+#include "CTPL/ctpl_stl.h"
+
+#include "spider.hpp"
+#include "logging.hpp"
+
+
+// TODO: Put some thought into this
+#define DEFAULT_THREADS (16)
 
 
 namespace {
@@ -29,6 +35,7 @@ using fd_entry = std::tuple<Spider::ID, Spider::Callback>;
 
 // Spider variables
 bool s_threaded = false;
+std::unique_ptr<ctpl::thread_pool> s_threadpool_ptr = nullptr;
 std::atomic_bool s_running = false;
 std::atomic_bool s_stopped = false;
 std::atomic<uint64_t> s_event_counter = 0;
@@ -72,7 +79,7 @@ bool Spider::IsRunning()
 
 bool Spider::IsThreaded()
 {
-    return s_threaded;
+    return s_threadpool_ptr != nullptr;
 }
 
 
@@ -81,7 +88,13 @@ void Spider::SetThreaded(bool threaded)
     if (Spider::IsRunning()) {
         throw Spider::SpiderException("Cannot set threading policy while running");
     }
-    s_threaded = threaded;
+    
+    if (threaded && !s_threadpool_ptr) {
+        // TODO: Make it possible to set amount of threads here
+        s_threadpool_ptr = std::make_unique<ctpl::thread_pool>(DEFAULT_THREADS);
+    } else if (!threaded && s_threadpool_ptr) {
+        s_threadpool_ptr.reset(nullptr);
+    }
 }
 
 
@@ -315,6 +328,9 @@ Spider::Return Spider::Stop(Spider::Input)
 {
     Spider::Log_DEBUG("Stopping loop after runtime (seconds): "+std::to_string(Spider::GetRuntime()));
     s_running = false;
+    if (s_threadpool_ptr) {
+        s_threadpool_ptr->stop();
+    }
     return 0;
 }
 
