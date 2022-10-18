@@ -5,8 +5,8 @@
 #include <unordered_map>
 #include <unistd.h>
 
-#include "logging.hpp"
-#include "timer.hpp"
+#include "../include/logging.hpp"
+#include "../include/timer.hpp"
 
 
 // Aonymous namespace

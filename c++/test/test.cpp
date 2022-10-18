@@ -2,9 +2,9 @@
 #include <iostream>
 
 
-#include "spider.hpp"
-#include "logging.hpp"
-#include "timer.hpp"
+#include "../include/spider.hpp"
+#include "../include/logging.hpp"
+#include "../include/timer.hpp"
 
 
 
@@ -28,6 +28,10 @@ Spider::Return every_cb(Spider::Input)
 
 int main()
 {
+    auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
+    std::cout << "System time " << now << std::endl;
+
+
     Spider::Log::SetLevel(Spider::Log::INFO);
     Spider::Log_INFO("Whatup");
 

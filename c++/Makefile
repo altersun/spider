@@ -1,36 +1,36 @@
-EXE := "spider_test.exe"
-OBJS = $(patsubst ./%.c,./%.o,$(wildcard ./*.c))
-OBJS += $(patsubst ./%.cpp,./%.opp,$(wildcard ./*.cpp))
-$(info $(OBJS))
+BUILD_DIR := "./build"
+SO := "$(BUILD_DIR)/spider_cpp.so"
+OBJS += $(patsubst ./source/%.cpp,./build/%.opp,$(wildcard ./source/*.cpp))
+
+
 
 .PHONY: all clean
-all: $(EXE)
+all: $(SO)
 
-run: $(EXE)
-	@./$(EXE)
-
-# Make test exe
+# Make Shared lib
 # TODO: Make threading (-lpthread) conditional
-$(EXE): $(OBJS)
+$(SO): $(OBJS)
 	@echo 'Linking source file(s) $(OBJS) together into $@...'
-	@$(CXX) -o "$@" $(OBJS) -lpthread
+	@$(CXX) -shared -fpic -o "$@" $(OBJS) -lpthread -Wl,-rpath,`realpath $(BUILD_DIR)`
 	@echo "Built $@"
 
 # Build cpp
-%.opp: %.cpp 
+./build/%.opp: ./source/%.cpp ./build
 	@echo 'Building source file $<...'
-	@$(CXX) --std=c++20 -g -c -o  "$@" "$<" 
+	@$(CXX) --std=c++20 -g -c -Wall -fpic -o  "$@" "$<" 
 	@echo 'Built $@'
 	@echo
 
-# Build c
-%.o: %.c 
-	@echo 'Building source file $<...'
-	@$(CC) -std=gnu18 -g -c -o "$@" "$<"
-	@echo 'Built $@'
-	@echo
+./build:
+	mkdir -p ./build
 
 clean:
-	@rm -f *.o* *.exe	
+	@rm -rf ./build/*.o* ./build/*.so ./build 
 	@echo "All clean!"
+
+outputs:
+	@echo $(OBJS) $(SO)
+
+test:
+	@echo "Not ready yet!"
 

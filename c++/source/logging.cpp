@@ -1,7 +1,7 @@
 #include <iostream>
 #include <vector>
 
-#include "logging.hpp"
+#include "../include/logging.hpp"
 
 namespace {
 #define LOGLVL(log_level) #log_level,

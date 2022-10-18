@@ -9,10 +9,10 @@
 #include <sys/epoll.h>
 #include <sys/time.h>
 
-#include "CTPL/ctpl_stl.h"
+#include "../CTPL/ctpl_stl.h"
 
-#include "spider.hpp"
-#include "logging.hpp"
+#include "../include/spider.hpp"
+#include "../include/logging.hpp"
 
 
 // TODO: Put some thought into this
@@ -117,7 +117,7 @@ Spider::ID Spider::AddFD(int fd, Spider::Callback callback)
 
 void Spider::RemoveFD(int fd)
 {
-    if (!s_fid_map.count(fd) > 0) {
+    if (!(s_fid_map.count(fd) > 0)) {
         return;
     }
 
@@ -127,7 +127,7 @@ void Spider::RemoveFD(int fd)
 
 Spider::ID GetID(int fd)
 {
-    if (!s_fid_map.count(fd) > 0) {
+    if (!(s_fid_map.count(fd) > 0)) {
         return 0;
     }
     return std::get<0>(s_fid_map[fd]);
