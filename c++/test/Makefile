@@ -26,3 +26,6 @@ clean:
 
 outputs:
 	@echo $(OBJS) $(EXE)
+
+run: $(EXE)
+	@$(EXE)

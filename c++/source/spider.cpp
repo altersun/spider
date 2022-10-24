@@ -2,6 +2,7 @@
 #include <atomic>
 #include <chrono>
 #include <cmath>
+#include <future>
 #include <queue>
 #include <map>
 #include <unordered_map>
@@ -43,7 +44,7 @@ uint64_t s_stop_at_event_count = 0;
 std::atomic<uint64_t> s_loop_counter = 0;
 Spider::Seconds s_increment = 0.01;
 std::chrono::time_point<std::chrono::steady_clock> s_starttime;
-Spider::Seconds s_runtime = 0.0;
+
 
 // epoll variables
 const unsigned int MAX_EVENTS = 100;
@@ -51,8 +52,13 @@ int s_epoll_fd = -1;
 struct epoll_event s_epoll_events[MAX_EVENTS] = {0};
 
 
-// Map FDs to callbacks
+// Map FDs to Handle objects
 std::map<int, fd_entry> s_fid_map;
+std::unordered_map<int, Spider::HandlePtr> s_handle_map;
+
+// The futures that store the results of callbacks are in their own structure for privacy
+// from the user. They are linked to their associated Handle objects by ID number
+std::unordered_map<Spider::ID, std::future<Spider::Return>> s_future_map;
 
 // Map Spider IDs to maintenance functions
 std::unordered_map<Spider::ID, Spider::Callback> s_maintenance_map;
@@ -69,6 +75,62 @@ static void AddLoopEvent(int fd);
 static void RemoveLoopEvent(int fd);
 static void CreateFdWatcher();
 static Spider::ID GetNewID();
+
+
+Spider::Handle::Handle(Spider::ID id, int fd, Spider::Callback callback)
+ : m_id(id)
+ , m_fd(fd)
+ , m_activations(0)
+ , m_callback(callback)
+{
+} 
+
+
+Spider::Handle::~Handle()
+{
+    if (s_future_map.count(GetID()) <= 0) {
+        s_future_map.erase(GetID());
+    }
+}
+
+
+int Spider::Handle::GetFD()
+{
+    return m_fd;
+}
+
+
+Spider::ID Spider::Handle::GetID()
+{
+    return m_id;
+}
+
+
+uint64_t Spider::Handle::GetActivations()
+{
+    return m_activations;
+}
+
+
+Spider::Return Spider::Handle::GetResult()
+{
+    if (IsResultReady()) {
+        return s_future_map[GetID()].get();
+    }
+    return Spider::INVALID_RETURN;
+}    
+
+
+bool Spider::Handle::IsResultReady()
+{
+    return s_future_map[GetID()].valid();
+}
+
+
+Spider::Callback Spider::Handle::GetCallback()
+{
+    return m_callback;
+}
 
 
 bool Spider::IsRunning()
@@ -98,7 +160,7 @@ void Spider::SetThreaded(bool threaded)
 }
 
 
-Spider::ID Spider::AddFD(int fd, Spider::Callback callback)
+Spider::HandlePtr AddFD(int fd, Spider::Callback callback)
 {
     if (s_fid_map.count(fd) > 0) {
         // TODO: Anthing better than excepting if entry exists?
@@ -107,12 +169,13 @@ Spider::ID Spider::AddFD(int fd, Spider::Callback callback)
     if (callback == nullptr) {
         throw Spider::SpiderException("Cannot register a null callback for "+std::to_string(fd));
     }
-    Spider::ID new_id = GetNewID();
-    s_fid_map[fd] = fd_entry{new_id, callback};
+    
+    s_handle_map[fd] = std::make_shared<Spider::Handle>(GetNewID(), fd, callback); 
     AddLoopEvent(fd);
     
-    return new_id; 
+    return s_handle_map[fd]; 
 }
+
 
 
 void Spider::RemoveFD(int fd)
@@ -121,16 +184,28 @@ void Spider::RemoveFD(int fd)
         return;
     }
 
-    s_fid_map.erase(fd);
+    RemoveLoopEvent(fd);
+    s_handle_map.erase(fd);
 }
 
 
-Spider::ID GetID(int fd)
+void Spider::RemoveFD(Spider::HandlePtr hp)
 {
-    if (!(s_fid_map.count(fd) > 0)) {
+    for (const auto& [fd, handle_ptr] : s_handle_map) {
+        if (hp == handle_ptr) {
+            RemoveFD(fd);
+            break;
+        }
+    }
+}
+
+
+Spider::HandlePtr GetHandlePtr(int fd)
+{
+    if (!(s_handle_map.count(fd) > 0)) {
         return 0;
     }
-    return std::get<0>(s_fid_map[fd]);
+    return s_handle_map[fd];
 }
 
 
@@ -186,7 +261,7 @@ void SpiderLoop()
     s_starttime = std::chrono::steady_clock::now();
 
     while (s_running) {
-        std::queue<Spider::Callback> queued_callbacks;
+        std::queue<Spider::HandlePtr> queued_callbacks;
 
         // Call epoll, the heart of this whole system
         // TODO: Make a sigmask and fill it out
@@ -205,18 +280,16 @@ void SpiderLoop()
             for (int count = 0; count < ready; count++) {
                 int fd = s_epoll_events[count].data.fd;
                 Spider::Log_DEBUG("Handling ready fd "+std::to_string(fd));
-                if (s_fid_map.count(fd) == 0) {
+                if (s_handle_map.count(fd) == 0) {
                     // fd may have been removed while waiting
                     // Do not act on it.
                     continue;
                 }
-                Spider::Log_DEBUG("FLAAAARG");
-                Spider::Callback cb = std::get<1>(s_fid_map[fd]);
-                if (cb == nullptr) {
+                if (s_handle_map[fd] == nullptr) {
                     Spider::Log_ERROR("Retrieved null callback for fd "+std::to_string(fd));
                     continue;
                 }
-                queued_callbacks.push(cb);
+                queued_callbacks.push(s_handle_map[fd]);
             }
 
             // Run through callbacks for ready FDs
@@ -224,11 +297,11 @@ void SpiderLoop()
                 auto to_call = queued_callbacks.front();
                 if (s_threaded) {
                     // TODO: Thread starts
-                    to_call();
+                    
                 } else {
                     try {
-                        to_call(); 
-                    } catch (const std::bad_function_call b) {
+                        s_future_map[to_call->GetID()] = std::async(std::launch::deferred, to_call->GetCallback());
+                    } catch (const std::bad_function_call& b) {
                         Spider::Log_ERROR("Could not run callback: "+std::string(b.what()));
                     }
                 }

@@ -9,8 +9,10 @@ namespace Spider {
 
 
 using Return = int; // TODO: determine real return type
+const Return INVALID_RETURN = -1; // NOTE: This needs to change with return type
 using Input = void; // TODO: determine real input type
 using Callback = std::function<Return(Input)>;
+//using Future = std::future<Return>;
 
 
 using ID = uint64_t;
@@ -37,10 +39,30 @@ uint64_t GetLoopCount();
 Seconds GetRuntime();
 
 
+class Handle 
+{   
+    public:
+        Handle(ID id, int fd, Callback callback);
+        ~Handle();
+        int GetFD();
+        ID GetID();
+        uint64_t GetActivations();
+        Return GetResult();
+        bool IsResultReady();
+        Callback GetCallback();
+    protected:
+        ID m_id;
+        int m_fd;
+        uint64_t m_activations;
+        Callback m_callback;
+};
+using HandlePtr = std::shared_ptr<Handle>;
 
-ID AddFD(int fd, Callback callback);
+
+HandlePtr AddFD(int fd, Callback callback);
 void RemoveFD(int fd);
-ID GetID(int fd);
+void RemoveFD(HandlePtr hp);
+HandlePtr GetHandlePtr(int fd);
 
 // NOTE: These will run EVERY LOOP. Add with care!
 ID AddMaintenanceCall(Callback callback);
@@ -51,6 +73,8 @@ void RemoveCall(ID id);
 int SecondsToTimeout(Seconds seconds);
 ::timespec ConvertSecondsToTimespec(Seconds seconds);
 std::string TimespecToString(::timespec ts);
+
+
 
 
 

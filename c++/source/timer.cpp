@@ -21,19 +21,16 @@ static Spider::Return TimerCallback(Spider::TimerHandlePtr timer_p, Spider::Call
 
 Spider::TimerHandle::~TimerHandle()
 {
-    ::close(m_fd);
-}
-
-
-int Spider::TimerHandle::GetFD() 
-{
-    Spider::Log_DEBUG("Return timerfd with fd value "+std::to_string(m_fd));
-    return m_fd;
+    ::close(GetFD());
+    if (s_timer_handles.count(GetFD()) > 0) {
+        s_timer_handles.erase(GetFD());
+    }
 }
 
 
 Spider::TimerHandle::TimerHandle(Spider::Seconds seconds, bool repeat)
- : m_time(seconds)
+ : Spider::Handle(blarg) // TODO: Fuck!
+ , m_time(seconds)
  , m_repeat(repeat) 
 {
     // TODO: Make this #define to use CLOCK_BOOTTIME if ALARM not supported
@@ -58,7 +55,6 @@ Spider::TimerHandle::TimerHandle(Spider::Seconds seconds, bool repeat)
     }
     m_spec.it_value = ts;
     
-
     if (timerfd_settime(m_fd, 0, &m_spec, NULL) < 0) {
         throw Spider::SpiderException("Could not set timer!");
     }
