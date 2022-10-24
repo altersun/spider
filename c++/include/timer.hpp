@@ -1,3 +1,8 @@
+#pragma once
+#ifndef SPIDER_TIMER_HPP
+#define SPIDER_TIMER_HPP
+
+
 #include <exception>
 #include <memory>
 #include <stdint.h>
@@ -11,7 +16,7 @@ namespace Spider {
 class TimerHandle : public Handle
 {
     public:
-        TimerHandle(Seconds s, bool repeat);
+        TimerHandle(Seconds s, Callback cb, bool repeat);
         ~TimerHandle();
         Seconds GetAssignedTime();
         Seconds GetTimeRemaining();
@@ -37,3 +42,5 @@ TimerHandlePtr CallLater(Seconds delay, Callback cb);
 
 
 } // end namespace Spider
+
+#endif // SPIDER_TIMER_HPP

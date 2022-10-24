@@ -22,16 +22,6 @@
 
 namespace {
 
-// Spider Types
-/*struct fd_entry {
-    fd_entry(Spider::ID i, Spider::Callback cb) 
-        : id(i)
-        , callback(cb)
-        {}
-    Spider::ID id;
-    Spider::Callback callback;
-};*/
-
 using fd_entry = std::tuple<Spider::ID, Spider::Callback>;
 
 // Spider variables
@@ -53,7 +43,6 @@ struct epoll_event s_epoll_events[MAX_EVENTS] = {0};
 
 
 // Map FDs to Handle objects
-std::map<int, fd_entry> s_fid_map;
 std::unordered_map<int, Spider::HandlePtr> s_handle_map;
 
 // The futures that store the results of callbacks are in their own structure for privacy
@@ -74,7 +63,7 @@ static void SpiderLoop();
 static void AddLoopEvent(int fd);
 static void RemoveLoopEvent(int fd);
 static void CreateFdWatcher();
-static Spider::ID GetNewID();
+
 
 
 Spider::Handle::Handle(Spider::ID id, int fd, Spider::Callback callback)
@@ -162,7 +151,7 @@ void Spider::SetThreaded(bool threaded)
 
 Spider::HandlePtr AddFD(int fd, Spider::Callback callback)
 {
-    if (s_fid_map.count(fd) > 0) {
+    if (s_handle_map.count(fd) > 0) {
         // TODO: Anthing better than excepting if entry exists?
         throw Spider::SpiderException("Cannot create duplicate entry for "+std::to_string(fd));
     }
@@ -170,17 +159,33 @@ Spider::HandlePtr AddFD(int fd, Spider::Callback callback)
         throw Spider::SpiderException("Cannot register a null callback for "+std::to_string(fd));
     }
     
-    s_handle_map[fd] = std::make_shared<Spider::Handle>(GetNewID(), fd, callback); 
+    s_handle_map[fd] = std::make_shared<Spider::Handle>(Spider::GetNextID(), fd, callback); 
     AddLoopEvent(fd);
     
     return s_handle_map[fd]; 
 }
 
 
+Spider::ID AddFD(Spider::HandlePtr hp)
+{
+    if (s_handle_map.count(hp->GetFD()) > 0) {
+        // TODO: Anthing better than excepting if entry exists?
+        throw Spider::SpiderException("Cannot create duplicate entry for "+std::to_string(fd));
+    }
+    if (hp->GetCallback() == nullptr) {
+        throw Spider::SpiderException("Cannot register a null callback for "+std::to_string(fd));
+    }
+    
+    s_handle_map[fd] = hp; 
+    AddLoopEvent(hp->GetFD());
+    
+    return hp->GetID();
+}
+
 
 void Spider::RemoveFD(int fd)
 {
-    if (!(s_fid_map.count(fd) > 0)) {
+    if (!(s_handle_map.count(fd) > 0)) {
         return;
     }
 
@@ -327,7 +332,7 @@ void SpiderLoop()
 }
 
 // Get a new ID to assign to a new Spider item
-Spider::ID GetNewID()
+Spider::ID GetNextID()
 {
     // NOTE: For now just use a monotonically increasing uint
     // TODO: Something more elegant?
@@ -424,14 +429,14 @@ Spider::Seconds Spider::GetRuntime()
 
 
 Spider::ID Spider::AddMaintenanceCall(Spider::Callback callback) {
-    Spider::ID id = GetNewID();
+    Spider::ID id = GetNextID();
     s_maintenance_map[id] = callback;
     return id;
 }
 
 
 Spider::ID Spider::CallOnce(Spider::Callback callback) {
-    Spider::ID id = GetNewID();
+    Spider::ID id = GetNextID();
     s_once_map[id] = callback;
     return id;
 }

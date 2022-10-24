@@ -5,8 +5,8 @@
 #include <unordered_map>
 #include <unistd.h>
 
-#include "../include/logging.hpp"
 #include "../include/timer.hpp"
+#include "../include/logging.hpp"
 
 
 // Aonymous namespace
@@ -29,11 +29,10 @@ Spider::TimerHandle::~TimerHandle()
 
 
 Spider::TimerHandle::TimerHandle(Spider::Seconds seconds, bool repeat)
- : Spider::Handle(blarg) // TODO: Fuck!
+ : Spider::Handle(Spider::GetNextID(), -1, nullptr) // m_fd and m_callback filled in later
  , m_time(seconds)
  , m_repeat(repeat) 
 {
-    // TODO: Make this #define to use CLOCK_BOOTTIME if ALARM not supported
     // TODO: See if the TFD_NONBLOCK flag is needed for the 2nd argument
     // https://man7.org/linux/man-pages/man2/timerfd_create.2.html
     m_fd = timerfd_create(CLOCK_BOOTTIME, 0);
@@ -93,13 +92,13 @@ void Spider::TimerHandle::Stop()
 }
 
 
-Spider::Return TimerCallback(Spider::TimerHandlePtr timer_p, Spider::Callback cb)
+Spider::Return TimerCallback(Spider::TimerHandlePtr timer_p)
 {
 
     Spider::Log_DEBUG("Starting timeout for fd "+std::to_string(timer_p->GetFD()));
 
     ReadTimerFd(timer_p);
-    Spider::Return ret = cb();
+    Spider::Return ret = timer_p->GetCallback();
     Spider::Log_DEBUG("Completed timeout for fd "+std::to_string(timer_p->GetFD()));
     if (!timer_p->IsRepeating()) {
         timer_p->Stop();
@@ -124,7 +123,7 @@ Spider::TimerHandlePtr AddTimer(Spider::Seconds sec, Spider::Callback cb, bool r
     // Add fd and callback to main spider loop
     try {
         // TODO: Do something with the ID
-        Spider::AddFD(timer_p->GetFD(), std::bind(TimerCallback,timer_p,cb));
+        Spider::AddFD(timer_p->GetFD(), std::bind(TimerCallback,timer_p));
     } catch(Spider::SpiderException &e) {
         Spider::Log_DEBUG(e.what());
         timer_p.reset();

@@ -1,7 +1,12 @@
+#pragma once
+#ifndef SPIDER_HPP
+#define SPIDER_HPP
+
 #include <errno.h>
 #include <functional>
 #include <stdexcept>
 #include <stdint.h>
+#include <memory>
 #include <string.h>
 
 
@@ -64,6 +69,9 @@ void RemoveFD(int fd);
 void RemoveFD(HandlePtr hp);
 HandlePtr GetHandlePtr(int fd);
 
+
+// TODO: Create a maintenance call that runs after a provided number of loops
+// TODO: ID AddMaintenanceCall(Callback callback, size_t after_loops)
 // NOTE: These will run EVERY LOOP. Add with care!
 ID AddMaintenanceCall(Callback callback);
 ID CallOnce(Callback callback);
@@ -74,8 +82,13 @@ int SecondsToTimeout(Seconds seconds);
 ::timespec ConvertSecondsToTimespec(Seconds seconds);
 std::string TimespecToString(::timespec ts);
 
-
-
+// Gets next ID in sequence
+// Intended to be used by plugins and not by a user
+// TODO: Maybe put this in a private header?
+ID GetNextID();
+ID AddFD(HandlePtr hp); // Also should only be used by plugins. Returns correct ID on success.
 
 
 }; // end Spider namespace 
+
+#endif // SPIDER_HPP

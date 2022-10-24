@@ -1,3 +1,8 @@
+#pragma once
+#ifndef SPIDER_LOGGING_HPP
+#define SPIDER_LOGGING_HPP
+
+
 #include <string>
 
 namespace Spider::Log {
@@ -33,3 +38,4 @@ namespace Spider {
 #undef LOGLVL
 }
 
+#endif // SPIDER_LOGGING_HPP
