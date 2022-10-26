@@ -170,13 +170,13 @@ Spider::ID AddFD(Spider::HandlePtr hp)
 {
     if (s_handle_map.count(hp->GetFD()) > 0) {
         // TODO: Anthing better than excepting if entry exists?
-        throw Spider::SpiderException("Cannot create duplicate entry for "+std::to_string(fd));
+        throw Spider::SpiderException("Cannot create duplicate entry for "+std::to_string(hp->GetFD()));
     }
     if (hp->GetCallback() == nullptr) {
-        throw Spider::SpiderException("Cannot register a null callback for "+std::to_string(fd));
+        throw Spider::SpiderException("Cannot register a null callback for "+std::to_string(hp->GetFD()));
     }
     
-    s_handle_map[fd] = hp; 
+    s_handle_map[hp->GetFD()] = hp; 
     AddLoopEvent(hp->GetFD());
     
     return hp->GetID();
@@ -196,12 +196,16 @@ void Spider::RemoveFD(int fd)
 
 void Spider::RemoveFD(Spider::HandlePtr hp)
 {
+    int fd = hp->GetFD(); // In case pointer gets deleted
+    Spider::RemoveFD(fd);
+    /* Old inefficient way left here as a map iteration example for self
     for (const auto& [fd, handle_ptr] : s_handle_map) {
         if (hp == handle_ptr) {
             RemoveFD(fd);
             break;
         }
     }
+    */
 }
 
 
