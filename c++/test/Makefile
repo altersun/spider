@@ -1,13 +1,15 @@
 EXE := "./spider_test.exe"
 OBJS += $(patsubst ./%.cpp,./%.opp,$(wildcard ./*.cpp))
-LIB := "../build/spider_cpp.so"
+LIB_PATH := $(shell dirname `pwd`)/build
+LIB := "spider_cpp.so"
+FULL_LIB := $(LIB_PATH)/$(LIB)
 
 .PHONY: all clean
 all: $(EXE)
 
 $(EXE): $(OBJS) $(LIB)
 	@echo 'Linking source file(s) $(OBJS) and lib $(LIB) together into $@...'
-	@$(CXX) -o "$@" $(OBJS) -lpthread -L ../build/ -l:spider_cpp.so
+	@$(CXX) -o "$@" $(OBJS) -lpthread -L$(LIB_PATH) -l:$(LIB)
 	@echo "Built $@"
 
 $(LIB):
@@ -27,5 +29,10 @@ clean:
 outputs:
 	@echo $(OBJS) $(EXE)
 
+lib_path:
+	@echo $(LIB_PATH)
+	@echo $(LIB)
+	@echo $(FULL_LIB)
+
 run: $(EXE)
-	@$(EXE)
+	@export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/$(LIB_PATH); $(EXE)

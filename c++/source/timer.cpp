@@ -15,8 +15,8 @@ namespace
 }
 
 static Spider::TimerHandlePtr AddTimer(Spider::Seconds sec, Spider::Callback cb, bool repeat);
-static uint64_t ReadTimerFd(Spider::TimerHandlePtr t_ptr);
-static Spider::Return TimerCallback(Spider::TimerHandlePtr timer_p, Spider::Callback cb);
+static uint64_t ReadTimerFd(Spider::TimerHandle* t_ptr);
+//static Spider::Return TimerCallback(Spider::TimerHandlePtr timer_p, Spider::Callback cb);
 
 Spider::TimerHandle::~TimerHandle()
 {
@@ -56,7 +56,7 @@ Spider::TimerHandle::TimerHandle(Spider::Seconds seconds, Spider::Callback cb, b
     }
     m_expirations = 0;
     //m_callback = std::bind(TimerCallback, nullptr, cb);
-    m_callback = std::bind(TimerCallback, std::make_shared<Spider::TimerHandle>(this), cb);
+    m_callback = std::bind(&TimerHandle::CallbackWrapper, this, cb);
 }
 
 float Spider::TimerHandle::GetAssignedTime()
@@ -86,16 +86,16 @@ void Spider::TimerHandle::Stop()
     s_timer_handles.erase(GetFD());
 }
 
-Spider::Return TimerCallback(Spider::TimerHandlePtr timer_p, Spider::Callback cb)
+Spider::Return Spider::TimerHandle::CallbackWrapper(Spider::Callback cb)
 {
 
-    Spider::Log_DEBUG("Starting timeout for fd " + std::to_string(timer_p->GetFD()));
+    Spider::Log_DEBUG("Starting timeout for fd " + std::to_string(GetFD()));
 
-    ReadTimerFd(timer_p);
+    ReadTimerFd(this);
     Spider::Return ret = cb();
-    Spider::Log_DEBUG("Completed timeout for fd " + std::to_string(timer_p->GetFD()));
-    if (!timer_p->IsRepeating()) {
-        timer_p->Stop();
+    Spider::Log_DEBUG("Completed timeout for fd " + std::to_string(GetFD()));
+    if (!IsRepeating()) {
+        Stop();
     }
     return ret;
 }
@@ -139,7 +139,7 @@ Spider::TimerHandlePtr Spider::CallEvery(Spider::Seconds increment, Spider::Call
     return AddTimer(increment, cb, true);
 }
 
-uint64_t ReadTimerFd(Spider::TimerHandlePtr t_ptr)
+uint64_t ReadTimerFd(Spider::TimerHandle* t_ptr)
 {
     uint64_t expirations = 0;
     if (::read(t_ptr->GetFD(), reinterpret_cast<void *>(&expirations), sizeof(expirations)) < 0) {

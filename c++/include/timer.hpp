@@ -22,7 +22,8 @@ class TimerHandle : public Handle
         Seconds GetTimeRemaining();
         bool IsRepeating();
         void Stop(); // Also serves as cancel for a non-repeating timer
-    protected: 
+    protected:
+        Return CallbackWrapper(Callback cb);
         Seconds m_time;
         ::itimerspec m_spec;
         bool m_repeat;

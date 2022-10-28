@@ -149,7 +149,7 @@ void Spider::SetThreaded(bool threaded)
 }
 
 
-Spider::HandlePtr AddFD(int fd, Spider::Callback callback)
+Spider::HandlePtr Spider::AddFD(int fd, Spider::Callback callback)
 {
     if (s_handle_map.count(fd) > 0) {
         // TODO: Anthing better than excepting if entry exists?
@@ -166,7 +166,7 @@ Spider::HandlePtr AddFD(int fd, Spider::Callback callback)
 }
 
 
-Spider::ID AddFD(Spider::HandlePtr hp)
+Spider::ID Spider::AddFD(Spider::HandlePtr hp)
 {
     if (s_handle_map.count(hp->GetFD()) > 0) {
         // TODO: Anthing better than excepting if entry exists?
@@ -336,7 +336,7 @@ void SpiderLoop()
 }
 
 // Get a new ID to assign to a new Spider item
-Spider::ID GetNextID()
+Spider::ID Spider::GetNextID()
 {
     // NOTE: For now just use a monotonically increasing uint
     // TODO: Something more elegant?

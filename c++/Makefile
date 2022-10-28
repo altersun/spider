@@ -1,4 +1,4 @@
-BUILD_DIR := "./build"
+BUILD_DIR := $(shell pwd)/build
 SO := "$(BUILD_DIR)/spider_cpp.so"
 OBJS += $(patsubst ./source/%.cpp,./build/%.opp,$(wildcard ./source/*.cpp))
 
