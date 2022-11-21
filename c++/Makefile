@@ -22,7 +22,7 @@ $(SO): $(OBJS)
 	@echo
 
 ./build:
-	mkdir -p ./build
+	@mkdir -p ./build
 
 clean:
 	@rm -rf ./build/*.o* ./build/*.so ./build 

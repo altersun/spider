@@ -32,10 +32,10 @@ int main()
     std::cout << "System time " << now << std::endl;
 
 
-    Spider::Log::SetLevel(Spider::Log::INFO);
+    Spider::Log::SetLevel(Spider::Log::DEBUG);
     Spider::Log_INFO("Whatup");
 
-
+    // CallOnce test 
     Spider::CallOnce([](){Spider::Log_INFO("Testing CallOnce!");return 0;});
     
     // CallEvery test
@@ -44,15 +44,16 @@ int main()
         Spider::Log_ERROR("CallEvery test setup failed!");
         return -1;
     }
+    Spider::Log_INFO("Created CallEvery TimerHandlePointer with fd "+std::to_string(tp->GetFD()));
 
-    // CallOnce test 
-    Spider::Callback once_test = [&] {
+    // Stop above CallEvery test
+    Spider::Callback tp_stopper = [&] {
         Spider::Log_INFO("Stopping timer with fd "+std::to_string(tp->GetFD()));
         tp->Stop();
         return 0;
     };
-    if (!Spider::CallLater(5.0, once_test)) {
-        Spider::Log_ERROR("CallLater 2 test setup failed!");
+    if (!Spider::CallLater(5.0, tp_stopper)) {
+        Spider::Log_ERROR("Could not set up callback to stop CallEvery TimerHandlerPointer!");
         return -1;
     }
 
@@ -63,7 +64,7 @@ int main()
     }
 
 
-    Spider::SetLoopIncrement(0.05);
+    Spider::SetLoopIncrement(0.5);
 
     Spider::Start();
 

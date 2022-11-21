@@ -10,6 +10,7 @@ namespace Spider::Log {
 
 // X-Macro
 #define LOGLVLS \
+    LOGLVL(VERBOSE) \
     LOGLVL(DEBUG) \
     LOGLVL(INFO) \
     LOGLVL(WARNING) \

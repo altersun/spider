@@ -16,7 +16,7 @@ namespace
 
 static Spider::TimerHandlePtr AddTimer(Spider::Seconds sec, Spider::Callback cb, bool repeat);
 static uint64_t ReadTimerFd(Spider::TimerHandle* t_ptr);
-//static Spider::Return TimerCallback(Spider::TimerHandlePtr timer_p, Spider::Callback cb);
+
 
 Spider::TimerHandle::~TimerHandle()
 {
@@ -26,6 +26,7 @@ Spider::TimerHandle::~TimerHandle()
         s_timer_handles.erase(GetFD());
     }
 }
+
 
 Spider::TimerHandle::TimerHandle(Spider::Seconds seconds, Spider::Callback cb, bool repeat)
     : Spider::Handle(Spider::GetNextID(), -1, nullptr), m_time(seconds), m_repeat(repeat)
@@ -55,14 +56,15 @@ Spider::TimerHandle::TimerHandle(Spider::Seconds seconds, Spider::Callback cb, b
         throw Spider::SpiderException("Could not set timer!");
     }
     m_expirations = 0;
-    //m_callback = std::bind(TimerCallback, nullptr, cb);
     m_callback = std::bind(&TimerHandle::CallbackWrapper, this, cb);
 }
+
 
 float Spider::TimerHandle::GetAssignedTime()
 {
     return m_time;
 }
+
 
 Spider::Seconds Spider::TimerHandle::GetTimeRemaining()
 {
@@ -75,16 +77,19 @@ Spider::Seconds Spider::TimerHandle::GetTimeRemaining()
     return static_cast<Spider::Seconds>(interval.it_value.tv_sec + interval.it_value.tv_nsec * 100000);
 }
 
+
 bool Spider::TimerHandle::IsRepeating()
 {
     return m_repeat;
 }
+
 
 void Spider::TimerHandle::Stop()
 {
     Spider::RemoveFD(GetFD());
     s_timer_handles.erase(GetFD());
 }
+
 
 Spider::Return Spider::TimerHandle::CallbackWrapper(Spider::Callback cb)
 {
@@ -99,6 +104,7 @@ Spider::Return Spider::TimerHandle::CallbackWrapper(Spider::Callback cb)
     }
     return ret;
 }
+
 
 Spider::TimerHandlePtr AddTimer(Spider::Seconds sec, Spider::Callback cb, bool repeat)
 {

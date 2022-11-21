@@ -104,7 +104,9 @@ uint64_t Spider::Handle::GetActivations()
 Spider::Return Spider::Handle::GetResult()
 {
     if (IsResultReady()) {
-        return s_future_map[GetID()].get();
+        Spider::Return ret = s_future_map[GetID()].get();
+        s_future_map.erase(GetID());
+        return ret;
     }
     return Spider::INVALID_RETURN;
 }    
@@ -112,7 +114,10 @@ Spider::Return Spider::Handle::GetResult()
 
 bool Spider::Handle::IsResultReady()
 {
-    return s_future_map[GetID()].valid();
+    if (s_future_map.count(GetID()) > 0) {
+        return s_future_map[GetID()].valid();
+    }
+    return false;
 }
 
 
@@ -309,7 +314,10 @@ void SpiderLoop()
                     
                 } else {
                     try {
-                        s_future_map[to_call->GetID()] = std::async(std::launch::deferred, to_call->GetCallback());
+                        // Using packaged_task here in order to hook up a synchronous function call to a future
+                        std::packaged_task<Spider::Return(Spider::Input)> task(to_call->GetCallback());
+                        s_future_map[to_call->GetID()] = task.get_future();
+                        task();
                     } catch (const std::bad_function_call& b) {
                         Spider::Log_ERROR("Could not run callback: "+std::string(b.what()));
                     }
@@ -319,7 +327,7 @@ void SpiderLoop()
         }
 
         // Maintenance stuff
-        for (const auto& [ID, callback] : s_maintenance_map) {
+        for (const auto& [id, callback] : s_maintenance_map) {
             // TODO: Threading?
             callback();
         }
