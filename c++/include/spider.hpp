@@ -17,20 +17,28 @@ using Return = int; // TODO: determine real return type
 const Return INVALID_RETURN = -1; // NOTE: This needs to change with return type
 using Input = void; // TODO: determine real input type
 using Callback = std::function<Return(Input)>;
-//using Future = std::future<Return>;
 
 
 using ID = uint64_t;
 using SpiderException = std::runtime_error;
 using Seconds = float;
 
-void SetThreaded(bool threaded);
 
-bool IsRunning();
+// Threading stuff
+enum class ThreadPolicy {
+    None,
+    Queue,
+    Pool,
+};
+void SetThreadPolicy(Spider::ThreadPolicy ThreadPolicy, ::size_t threads=0);
+ThreadPolicy GetThreadPolicy();
 bool IsThreaded();
+
+// Start/Stop/Status
 void Start();
 void Start(uint64_t stop_at_event); // TODO: Stop after a specific number of events???
 Return Stop(Input);
+bool IsRunning();
 
 // Set time in seconds between loop increments
 // Endpoint activity will wake the loop but 
@@ -52,9 +60,10 @@ class Handle
         int GetFD();
         ID GetID();
         uint64_t GetActivations();
-        Return GetResult();
-        bool IsResultReady();
+        //Return GetResult();
+        //bool IsResultReady();
         Callback GetCallback();
+        Return operator()(Seconds timeout=0.0);
     protected:
         ID m_id;
         int m_fd;
@@ -70,7 +79,7 @@ void RemoveFD(HandlePtr hp);
 HandlePtr GetHandlePtr(int fd);
 
 
-// TODO: Create a maintenance call that runs after a provided number of loops
+// Create a maintenance call that runs after a provided number of loops
 // TODO: ID AddMaintenanceCall(Callback callback, size_t after_loops)
 // NOTE: These will run EVERY LOOP. Add with care!
 ID AddMaintenanceCall(Callback callback);

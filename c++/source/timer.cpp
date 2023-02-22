@@ -116,7 +116,6 @@ Spider::TimerHandlePtr AddTimer(Spider::Seconds sec, Spider::Callback cb, bool r
         Spider::Log_ERROR(e.what());
         return nullptr;
     }
-
     Spider::Log_DEBUG("Created Timer with FD " + std::to_string(timer_p->GetFD()));
 
     // Add fd and callback to main spider loop

@@ -1,5 +1,6 @@
 #include <algorithm>
 #include <atomic>
+#include <cerrno>
 #include <chrono>
 #include <cmath>
 #include <future>
@@ -18,6 +19,7 @@
 
 // TODO: Put some thought into this
 #define DEFAULT_THREADS (16)
+#define MAX_THREADS (128) 
 
 
 namespace {
@@ -25,8 +27,6 @@ namespace {
 using fd_entry = std::tuple<Spider::ID, Spider::Callback>;
 
 // Spider variables
-bool s_threaded = false;
-std::unique_ptr<ctpl::thread_pool> s_threadpool_ptr = nullptr;
 std::atomic_bool s_running = false;
 std::atomic_bool s_stopped = false;
 std::atomic<uint64_t> s_event_counter = 0;
@@ -35,6 +35,9 @@ std::atomic<uint64_t> s_loop_counter = 0;
 Spider::Seconds s_increment = 0.01;
 std::chrono::time_point<std::chrono::steady_clock> s_starttime;
 
+// Threading variables
+Spider::ThreadPolicy s_thread_policy = Spider::ThreadPolicy::None;
+std::unique_ptr<ctpl::thread_pool> s_threadpool_ptr = nullptr;
 
 // epoll variables
 const unsigned int MAX_EVENTS = 100;
@@ -101,23 +104,32 @@ uint64_t Spider::Handle::GetActivations()
 }
 
 
-Spider::Return Spider::Handle::GetResult()
+Spider::Return Spider::Handle::operator()(Spider::Seconds timeout)
 {
-    if (IsResultReady()) {
-        Spider::Return ret = s_future_map[GetID()].get();
-        s_future_map.erase(GetID());
-        return ret;
+    if (timeout < 0) {
+        throw Spider::SpiderException("Timeout cannot be zero or less!");
     }
-    return Spider::INVALID_RETURN;
-}    
-
-
-bool Spider::Handle::IsResultReady()
-{
-    if (s_future_map.count(GetID()) > 0) {
-        return s_future_map[GetID()].valid();
+    
+    if (s_future_map.count(GetID()) <= 0) {
+        return Spider::INVALID_RETURN;
+        // TODO: Throw exception here?
     }
-    return false;
+
+    if (timeout == 0) {
+        s_future_map[GetID()].wait();
+    } else {
+        std::chrono::duration dur = std::chrono::round<std::chrono::nanoseconds>(std::chrono::duration<float>{timeout});
+        std::future_status status = s_future_map[GetID()].wait_for(dur);
+        if (status != std::future_status::ready) {
+            return Spider::INVALID_RETURN;
+        }
+    }
+    if (!s_future_map[GetID()].valid()) {
+        return Spider::INVALID_RETURN;
+    }
+    auto ret = s_future_map[GetID()].get();
+    s_future_map.erase(GetID());
+    return ret;
 }
 
 
@@ -133,24 +145,44 @@ bool Spider::IsRunning()
 }
 
 
-bool Spider::IsThreaded()
-{
-    return s_threadpool_ptr != nullptr;
-}
-
-
-void Spider::SetThreaded(bool threaded)
+void Spider::SetThreadPolicy(Spider::ThreadPolicy policy, ::size_t threads)
 {
     if (Spider::IsRunning()) {
         throw Spider::SpiderException("Cannot set threading policy while running");
     }
+
+    if (policy == GetThreadPolicy()) {
+        return;
+    }
+
+    if (threads > MAX_THREADS) {
+        throw Spider::SpiderException("Too many threads!");
+    }
+
+    // Clear existing thread stuff to be on the safe side
+    s_threadpool_ptr.reset(nullptr);
     
-    if (threaded && !s_threadpool_ptr) {
+    // Pool
+    if (policy == Spider::ThreadPolicy::Pool && !s_threadpool_ptr) {
         // TODO: Make it possible to set amount of threads here
         s_threadpool_ptr = std::make_unique<ctpl::thread_pool>(DEFAULT_THREADS);
-    } else if (!threaded && s_threadpool_ptr) {
-        s_threadpool_ptr.reset(nullptr);
+    } 
+
+    if (policy == Spider::ThreadPolicy::Queue) {
+        throw Spider::SpiderException("Queue not available yet!");
     }
+}
+
+
+Spider::ThreadPolicy GetThreadPolicy() 
+{
+    return s_thread_policy;
+}
+
+
+bool Spider::IsThreaded()
+{
+    return (Spider::GetThreadPolicy() != Spider::ThreadPolicy::None);
 }
 
 
@@ -233,7 +265,6 @@ void CreateFdWatcher()
     }
     s_epoll_fd = ::epoll_create1(0);
     if (s_epoll_fd < 0) {
-        // TODO: Bail
         throw Spider::SpiderException("Could not create loop");
     }
 }
@@ -247,12 +278,27 @@ void AddLoopEvent(int fd)
     if (s_epoll_fd < 0) {
         CreateFdWatcher();
     }
+
+    // Being paranoid at this point but who knows how this code may change in the future?
+    if (s_handle_map.count(fd) > 0) {
+        // NOTE: Attempting to re-add an existing entry here is not worth excepting
+        Spider::Log_WARNING("Attempted to re-add duplicate fd "+std::to_string(fd));
+    }
     
-    Spider::Log_DEBUG("Added fd "+std::to_string(fd));
+    Spider::Log_DEBUG("Adding fd "+std::to_string(fd));
     struct epoll_event ev = {0};
     ev.events = EPOLLIN;
     ev.data.fd = fd;
-    ::epoll_ctl(s_epoll_fd, EPOLL_CTL_ADD, fd, &ev);
+    int ret = ::epoll_ctl(s_epoll_fd, EPOLL_CTL_ADD, fd, &ev);
+    if (ret != 0) {
+        if (errno == EEXIST) { // Extra-paranoid!
+            // NOTE: Attempting to re-add an existing entry here is not worth excepting
+            Spider::Log_WARNING("Attempted to re-add duplicate fd "+std::to_string(fd));
+        } else if (errno == EINVAL) {
+            throw Spider::SpiderException("Cannot add invalid fd "+std::to_string(fd));
+        }
+    }
+    Spider::Log_DEBUG("Added fd "+std::to_string(fd));
 }
 
 
@@ -280,7 +326,7 @@ void SpiderLoop()
         // Call epoll, the heart of this whole system
         // TODO: Make a sigmask and fill it out
         int timeout = Spider::SecondsToTimeout(Spider::GetLoopIncrement());
-        Spider::Log_DEBUG("Waiting with delay "+std::to_string(timeout)+ " at time "+std::to_string(Spider::GetRuntime()));
+        Spider::Log_VERBOSE("Waiting with delay "+std::to_string(timeout)+ " at time "+std::to_string(Spider::GetRuntime()));
         int ready = epoll_pwait(s_epoll_fd, s_epoll_events, MAX_EVENTS, 
             timeout, NULL);
         if (ready < 0) {
@@ -309,7 +355,7 @@ void SpiderLoop()
             // Run through callbacks for ready FDs
             while (!queued_callbacks.empty()) {
                 auto to_call = queued_callbacks.front();
-                if (s_threaded) {
+                if (s_thread_policy != Spider::ThreadPolicy::None) {
                     // TODO: Thread starts
                     
                 } else {
