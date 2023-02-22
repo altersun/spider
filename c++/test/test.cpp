@@ -32,7 +32,7 @@ int main()
     std::cout << "System time " << now << std::endl;
 
 
-    Spider::Log::SetLevel(Spider::Log::DEBUG);
+    Spider::Log::SetLevel(Spider::Log::INFO);
     Spider::Log_INFO("Whatup");
 
     // CallOnce test 

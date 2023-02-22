@@ -35,9 +35,6 @@ std::atomic<uint64_t> s_loop_counter = 0;
 Spider::Seconds s_increment = 0.01;
 std::chrono::time_point<std::chrono::steady_clock> s_starttime;
 
-// Threading variables
-Spider::ThreadPolicy s_thread_policy = Spider::ThreadPolicy::None;
-std::unique_ptr<ctpl::thread_pool> s_threadpool_ptr = nullptr;
 
 // epoll variables
 const unsigned int MAX_EVENTS = 100;
@@ -47,10 +44,6 @@ struct epoll_event s_epoll_events[MAX_EVENTS] = {0};
 
 // Map FDs to Handle objects
 std::unordered_map<int, Spider::HandlePtr> s_handle_map;
-
-// The futures that store the results of callbacks are in their own structure for privacy
-// from the user. They are linked to their associated Handle objects by ID number
-std::unordered_map<Spider::ID, std::future<Spider::Return>> s_future_map;
 
 // Map Spider IDs to maintenance functions
 std::unordered_map<Spider::ID, Spider::Callback> s_maintenance_map;
@@ -80,9 +73,7 @@ Spider::Handle::Handle(Spider::ID id, int fd, Spider::Callback callback)
 
 Spider::Handle::~Handle()
 {
-    if (s_future_map.count(GetID()) <= 0) {
-        s_future_map.erase(GetID());
-    }
+
 }
 
 
@@ -104,35 +95,6 @@ uint64_t Spider::Handle::GetActivations()
 }
 
 
-Spider::Return Spider::Handle::operator()(Spider::Seconds timeout)
-{
-    if (timeout < 0) {
-        throw Spider::SpiderException("Timeout cannot be zero or less!");
-    }
-    
-    if (s_future_map.count(GetID()) <= 0) {
-        return Spider::INVALID_RETURN;
-        // TODO: Throw exception here?
-    }
-
-    if (timeout == 0) {
-        s_future_map[GetID()].wait();
-    } else {
-        std::chrono::duration dur = std::chrono::round<std::chrono::nanoseconds>(std::chrono::duration<float>{timeout});
-        std::future_status status = s_future_map[GetID()].wait_for(dur);
-        if (status != std::future_status::ready) {
-            return Spider::INVALID_RETURN;
-        }
-    }
-    if (!s_future_map[GetID()].valid()) {
-        return Spider::INVALID_RETURN;
-    }
-    auto ret = s_future_map[GetID()].get();
-    s_future_map.erase(GetID());
-    return ret;
-}
-
-
 Spider::Callback Spider::Handle::GetCallback()
 {
     return m_callback;
@@ -142,47 +104,6 @@ Spider::Callback Spider::Handle::GetCallback()
 bool Spider::IsRunning()
 {
     return s_running;
-}
-
-
-void Spider::SetThreadPolicy(Spider::ThreadPolicy policy, ::size_t threads)
-{
-    if (Spider::IsRunning()) {
-        throw Spider::SpiderException("Cannot set threading policy while running");
-    }
-
-    if (policy == GetThreadPolicy()) {
-        return;
-    }
-
-    if (threads > MAX_THREADS) {
-        throw Spider::SpiderException("Too many threads!");
-    }
-
-    // Clear existing thread stuff to be on the safe side
-    s_threadpool_ptr.reset(nullptr);
-    
-    // Pool
-    if (policy == Spider::ThreadPolicy::Pool && !s_threadpool_ptr) {
-        // TODO: Make it possible to set amount of threads here
-        s_threadpool_ptr = std::make_unique<ctpl::thread_pool>(DEFAULT_THREADS);
-    } 
-
-    if (policy == Spider::ThreadPolicy::Queue) {
-        throw Spider::SpiderException("Queue not available yet!");
-    }
-}
-
-
-Spider::ThreadPolicy GetThreadPolicy() 
-{
-    return s_thread_policy;
-}
-
-
-bool Spider::IsThreaded()
-{
-    return (Spider::GetThreadPolicy() != Spider::ThreadPolicy::None);
 }
 
 
@@ -213,8 +134,8 @@ Spider::ID Spider::AddFD(Spider::HandlePtr hp)
         throw Spider::SpiderException("Cannot register a null callback for "+std::to_string(hp->GetFD()));
     }
     
-    s_handle_map[hp->GetFD()] = hp; 
     AddLoopEvent(hp->GetFD());
+    s_handle_map[hp->GetFD()] = hp; 
     
     return hp->GetID();
 }
@@ -355,18 +276,12 @@ void SpiderLoop()
             // Run through callbacks for ready FDs
             while (!queued_callbacks.empty()) {
                 auto to_call = queued_callbacks.front();
-                if (s_thread_policy != Spider::ThreadPolicy::None) {
-                    // TODO: Thread starts
-                    
-                } else {
-                    try {
-                        // Using packaged_task here in order to hook up a synchronous function call to a future
-                        std::packaged_task<Spider::Return(Spider::Input)> task(to_call->GetCallback());
-                        s_future_map[to_call->GetID()] = task.get_future();
-                        task();
-                    } catch (const std::bad_function_call& b) {
-                        Spider::Log_ERROR("Could not run callback: "+std::string(b.what()));
-                    }
+                try {
+                    // TODO: Using packaged_task here in order to hook up a synchronous function call to a future
+                    std::packaged_task<Spider::Return(Spider::Input)> task(to_call->GetCallback());
+                    task();
+                } catch (const std::bad_function_call& b) {
+                    Spider::Log_ERROR("Could not run callback: "+std::string(b.what()));
                 }
                 queued_callbacks.pop();
             }
@@ -464,9 +379,6 @@ Spider::Return Spider::Stop(Spider::Input)
 {
     Spider::Log_DEBUG("Stopping loop after runtime (seconds): "+std::to_string(Spider::GetRuntime()));
     s_running = false;
-    if (s_threadpool_ptr) {
-        s_threadpool_ptr->stop();
-    }
     return 0;
 }
 

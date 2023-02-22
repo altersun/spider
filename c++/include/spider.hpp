@@ -24,16 +24,6 @@ using SpiderException = std::runtime_error;
 using Seconds = float;
 
 
-// Threading stuff
-enum class ThreadPolicy {
-    None,
-    Queue,
-    Pool,
-};
-void SetThreadPolicy(Spider::ThreadPolicy ThreadPolicy, ::size_t threads=0);
-ThreadPolicy GetThreadPolicy();
-bool IsThreaded();
-
 // Start/Stop/Status
 void Start();
 void Start(uint64_t stop_at_event); // TODO: Stop after a specific number of events???
@@ -63,7 +53,6 @@ class Handle
         //Return GetResult();
         //bool IsResultReady();
         Callback GetCallback();
-        Return operator()(Seconds timeout=0.0);
     protected:
         ID m_id;
         int m_fd;
