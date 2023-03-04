@@ -3,15 +3,13 @@ SO := "$(BUILD_DIR)/spider_cpp.so"
 OBJS += $(patsubst ./source/%.cpp,./build/%.opp,$(wildcard ./source/*.cpp))
 
 
-
 .PHONY: all clean
 all: $(SO)
 
 # Make Shared lib
-# TODO: Make threading (-lpthread) conditional
 $(SO): $(OBJS)
 	@echo 'Linking source file(s) $(OBJS) together into $@...'
-	@$(CXX) -shared -fpic -o "$@" $(OBJS) -lpthread -Wl,-rpath,`realpath $(BUILD_DIR)`
+	@$(CXX) -shared -fpic -o "$@" $(OBJS) -Wl,-rpath,`realpath $(BUILD_DIR)`
 	@echo "Built $@"
 
 # Build cpp
@@ -32,5 +30,5 @@ outputs:
 	@echo $(OBJS) $(SO)
 
 test:
-	@echo "Not ready yet!"
+	@echo "Not implemented yet!"
 

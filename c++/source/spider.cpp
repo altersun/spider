@@ -275,9 +275,7 @@ void SpiderLoop()
             while (!queued_callbacks.empty()) {
                 auto to_call = queued_callbacks.front();
                 try {
-                    // TODO: Using packaged_task here in order to hook up a synchronous function call to a future
-                    std::packaged_task<Spider::Return(Spider::Input)> task(to_call->GetCallback());
-                    task();
+                    to_call->GetCallback()();
                 } catch (const std::bad_function_call& b) {
                     Spider::Log_ERROR("Could not run callback: "+std::string(b.what()));
                 }

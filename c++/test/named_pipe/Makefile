@@ -1,6 +1,7 @@
-EXE := "./spider_test.exe"
+EXE := "./spider_fifo_test.exe"
 OBJS += $(patsubst ./%.cpp,./%.opp,$(wildcard ./*.cpp))
-LIB_PATH := $(shell dirname `pwd`)/build
+TEST_DIR := $(shell dirname `pwd`)
+LIB_PATH := $(shell dirname $(TEST_DIR))/build
 LIB := "spider_cpp.so"
 FULL_LIB := $(LIB_PATH)/$(LIB)
 

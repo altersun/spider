@@ -50,8 +50,6 @@ class Handle
         int GetFD();
         ID GetID();
         uint64_t GetActivations();
-        //Return GetResult();
-        //bool IsResultReady();
         Callback GetCallback();
     protected:
         ID m_id;
