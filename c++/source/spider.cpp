@@ -11,8 +11,6 @@
 #include <sys/epoll.h>
 #include <sys/time.h>
 
-#include "../CTPL/ctpl_stl.h"
-
 #include "../include/spider.hpp"
 #include "../include/logging.hpp"
 
