@@ -1,5 +1,6 @@
 #include <cmath>
 #include <fcntl.h>
+#include <sys/epoll.h>
 #include <sys/time.h>
 #include <sys/timerfd.h>
 #include <unordered_map>
@@ -56,7 +57,8 @@ Spider::TimerHandle::TimerHandle(Spider::Seconds seconds, Spider::Callback cb, b
         throw Spider::SpiderException("Could not set timer!");
     }
     m_expirations = 0;
-    m_callback = std::bind(&TimerHandle::CallbackWrapper, this, cb);
+    Spider::Log_DEBUG("Gurf!");
+    m_callbacks[EPOLLIN] = std::bind(&TimerHandle::CallbackWrapper, this, cb);
 }
 
 

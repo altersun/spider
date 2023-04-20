@@ -4,6 +4,9 @@ LIB_PATH := $(shell dirname `pwd`)/build
 LIB := "spider_cpp.so"
 FULL_LIB := $(LIB_PATH)/$(LIB)
 
+# TODO: Make a rule "make debug" that sets these dynamically
+DBG_FLAGS := -ggdb -O0
+
 .PHONY: all clean
 all: $(EXE)
 
@@ -18,7 +21,7 @@ $(LIB):
 # Build cpp
 ./%.opp: ./%.cpp 
 	@echo 'Building source file $<...'
-	@$(CXX) --std=c++20 -g -c -Wall -fpic -o  "$@" "$<" 
+	@$(CXX) --std=c++20 $(DBG_FLAGS) -g -c -Wall -fpic -o  "$@" "$<" 
 	@echo 'Built $@'
 	@echo
 

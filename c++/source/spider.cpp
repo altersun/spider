@@ -59,12 +59,58 @@ static void RemoveLoopEvent(int fd);
 static void CreateFdWatcher();
 
 
+Spider::Callbacks::Callbacks(Spider::Callback r_cb, Spider::Callback w_cb)
+ : m_r_cb(r_cb)
+ , m_w_cb(w_cb)
+{}
+
+
+Spider::Callback Spider::Callbacks::operator[](int op) const
+{
+    switch (op) {
+        case EPOLLIN: {
+            return m_r_cb;
+        } 
+        case EPOLLOUT: {
+            return m_w_cb;
+        }
+        default: {
+            throw Spider::SpiderException("Invalid callback selection "+std::to_string(op));
+        }
+    }
+}
+
+
+Spider::Callback& Spider::Callbacks::operator[](int op)
+{
+    switch (op) {
+        case EPOLLIN: {
+            return m_r_cb;
+        } 
+        case EPOLLOUT: {
+            return m_w_cb;
+        }
+        default: {
+            throw Spider::SpiderException("Invalid callback selection "+std::to_string(op));
+        }
+    }
+}
+
 
 Spider::Handle::Handle(Spider::ID id, int fd, Spider::Callback callback)
  : m_id(id)
  , m_fd(fd)
  , m_activations(0)
- , m_callback(callback)
+ , m_callbacks(Spider::Callbacks(callback, nullptr))
+{
+} 
+
+
+Spider::Handle::Handle(Spider::ID id, int fd, Spider::Callbacks callbacks)
+ : m_id(id)
+ , m_fd(fd)
+ , m_activations(0)
+ , m_callbacks(callbacks)
 {
 } 
 
@@ -93,9 +139,15 @@ uint64_t Spider::Handle::GetActivations()
 }
 
 
-Spider::Callback Spider::Handle::GetCallback()
+const Spider::Callback& Spider::Handle::GetCallback()
 {
-    return m_callback;
+    return m_callbacks[EPOLLIN];
+}
+
+
+const Spider::Callbacks& Spider::Handle::GetCallbacks()
+{
+    return m_callbacks;
 }
 
 
@@ -107,15 +159,18 @@ bool Spider::IsRunning()
 
 Spider::HandlePtr Spider::AddFD(int fd, Spider::Callback callback)
 {
+    return Spider::AddFD(fd, Spider::Callbacks(callback, nullptr));
+}
+
+
+Spider::HandlePtr Spider::AddFD(int fd, Spider::Callbacks callbacks)
+{
     if (s_handle_map.count(fd) > 0) {
         // TODO: Anthing better than excepting if entry exists?
         throw Spider::SpiderException("Cannot create duplicate entry for "+std::to_string(fd));
     }
-    if (callback == nullptr) {
-        throw Spider::SpiderException("Cannot register a null callback for "+std::to_string(fd));
-    }
     
-    s_handle_map[fd] = std::make_shared<Spider::Handle>(Spider::GetNextID(), fd, callback); 
+    s_handle_map[fd] = std::make_shared<Spider::Handle>(Spider::GetNextID(), fd, callbacks); 
     AddLoopEvent(fd);
     
     return s_handle_map[fd]; 
@@ -189,8 +244,7 @@ void CreateFdWatcher()
 }
 
 
-// TODO: Right now this only checks ready for read not using edge triggering
-// TODO: Allow for more options
+// TODO: Right now this only checks ready for read not using edge triggering 
 void AddLoopEvent(int fd)
 {
     // Cannot continue if epoll has not yet been set up
@@ -200,13 +254,22 @@ void AddLoopEvent(int fd)
 
     // Being paranoid at this point but who knows how this code may change in the future?
     if (s_handle_map.count(fd) > 0) {
-        // NOTE: Attempting to re-add an existing entry here is not worth excepting
+        // NOTE: Attempting to re-add an existing entryhere is not worth excepting
         Spider::Log_WARNING("Attempted to re-add duplicate fd "+std::to_string(fd));
     }
     
-    Spider::Log_DEBUG("Adding fd "+std::to_string(fd));
     struct epoll_event ev = {0};
-    ev.events = EPOLLIN;
+    Spider::Log_DEBUG("Adding EPOLLIN func for fd "+std::to_string(fd));
+    const Spider::Callbacks& cbs = s_handle_map[fd]->GetCallbacks();
+   // if (s_handle_map[fd]->GetCallbacks()[EPOLLIN]) {
+    Spider::Log_DEBUG("Derp!");
+    if (cbs[EPOLLIN]) {
+        ev.events = EPOLLIN;
+    }
+    Spider::Log_DEBUG("Adding EPOLLOUT func for fd "+std::to_string(fd));
+    if (s_handle_map[fd]->GetCallbacks()[EPOLLOUT]) {
+        ev.events = EPOLLOUT;
+    }
     ev.data.fd = fd;
     int ret = ::epoll_ctl(s_epoll_fd, EPOLL_CTL_ADD, fd, &ev);
     if (ret != 0) {
@@ -246,8 +309,7 @@ void SpiderLoop()
         // TODO: Make a sigmask and fill it out
         int timeout = Spider::SecondsToTimeout(Spider::GetLoopIncrement());
         Spider::Log_VERBOSE("Waiting with delay "+std::to_string(timeout)+ " at time "+std::to_string(Spider::GetRuntime()));
-        int ready = epoll_pwait(s_epoll_fd, s_epoll_events, MAX_EVENTS, 
-            timeout, NULL);
+        int ready = epoll_pwait(s_epoll_fd, s_epoll_events, MAX_EVENTS, timeout, NULL);
         if (ready < 0) {
             // TODO: Error handling
         } else if (ready > 0) { 
@@ -255,7 +317,7 @@ void SpiderLoop()
             Spider::Log_DEBUG("FDs ready: "+std::to_string(ready));
             s_event_counter += ready;
 
-            // Epoll management here
+            // Epoll management
             for (int count = 0; count < ready; count++) {
                 int fd = s_epoll_events[count].data.fd;
                 Spider::Log_DEBUG("Handling ready fd "+std::to_string(fd));

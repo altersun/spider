@@ -14,7 +14,7 @@ Spider::Return print_often(Spider::Input)
     if (derp++%100 == 0) {
         auto now = std::chrono::system_clock::to_time_t(std::chrono::system_clock::now());
         Spider::Log_INFO("HI! "+std::to_string(Spider::GetLoopCount())+" "+std::to_string(now));
-    }]['' ]
+    }
     return 0;
 }
 

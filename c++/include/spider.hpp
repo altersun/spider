@@ -42,25 +42,42 @@ uint64_t GetLoopCount();
 Seconds GetRuntime();
 
 
+// Struct for setting callbacks for more detailed behavior
+// Has room to grow with later versions
+struct Callbacks
+{
+    public:
+        Callbacks(Callback r_cb, Callback w_cb);
+        Callback operator[](int op) const;
+        Callback& operator[](int op);
+    private:
+        Callback m_r_cb;
+        Callback m_w_cb;
+};
+
+
 class Handle 
 {   
     public:
         Handle(ID id, int fd, Callback callback);
+        Handle(ID id, int fd, Callbacks callbacks);
         ~Handle();
         int GetFD();
         ID GetID();
         uint64_t GetActivations();
-        Callback GetCallback();
+        const Callback& GetCallback();
+        const Callbacks& GetCallbacks();
     protected:
         ID m_id;
         int m_fd;
         uint64_t m_activations;
-        Callback m_callback;
+        Callbacks m_callbacks;
 };
 using HandlePtr = std::shared_ptr<Handle>;
 
 
 HandlePtr AddFD(int fd, Callback callback);
+HandlePtr AddFD(int fd, Callbacks callbacks);
 void RemoveFD(int fd);
 void RemoveFD(HandlePtr hp);
 HandlePtr GetHandlePtr(int fd);
